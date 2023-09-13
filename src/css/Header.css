@@ -1,0 +1,24 @@
+.app-header {
+    background-color: #002848; /* Blue color */
+    color: white; /* White text */
+    text-align: left; /* Align text to the left */
+    padding: 1.5rem; /* Reduced padding */
+    position: sticky; /* Make the header sticky */
+    top: 0; /* Stick to the top of the viewport */
+    z-index: 4;
+    min-height: 80px;
+}
+
+.logo-inner {
+    /*background: rgb(235, 231, 226);; !* Background color *!*/
+    /*background-color: rgb(235, 231, 226);; !* Text color *!*/
+    padding: 5px 10px; /* Adjust padding as needed */
+    font-family: 'Montserrat Light Alt1', sans-serif; /* Font family */
+    font-size: 32px; /* Font size */
+    font-weight: 300; /* Font weight */
+    letter-spacing: 2px; /* Letter spacing */
+    text-transform: uppercase; /* Text in uppercase */
+    border-radius: 5px; /* Rounded corners */
+    display: inline-block; /* Display as inline block to fit content */
+    text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.2); /* Text shadow */
+}

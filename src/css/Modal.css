@@ -1,0 +1,59 @@
+
+.modal__backdrop {
+    background: rgba(0, 0, 0, .65);
+    bottom: 0;
+    left: 0;
+    overflow: auto;
+    position: fixed;
+    right: 0;
+    top: 0;
+    z-index: 4;
+}
+
+.modal__container {
+    background: #fff;
+    border-radius: 5px;
+    max-width: 100%;
+    margin: 50px auto;
+    padding: 15px;
+    width: 560px;
+}
+
+.modal__title {
+    font-size: 18px;
+    font-weight: 600;
+    margin-bottom: 25px;
+}
+
+/*button {*/
+/*    background: #8c54ff;*/
+/*    border: 0;*/
+/*    border-radius: 5px;*/
+/*    color: #fff;*/
+/*    cursor: pointer;*/
+/*    font-size: 16px;*/
+/*    font-weight: 600;*/
+/*    margin-bottom: 30px;*/
+/*    padding: 10px 15px;*/
+/*    transition: transform 100ms ease-out;*/
+
+/*    &:hover {*/
+/*        background: #682ede;*/
+/*        transform: scale(1.1);*/
+/*    }*/
+/*}*/
+
+/*a {*/
+/*    border-radius: 5px;*/
+/*    color: #682ede;*/
+/*    font-weight: 600;*/
+/*    padding: 2px 4px;*/
+/*    margin-left: -2px;*/
+/*    margin-right: -2px;*/
+
+/*    &:hover {*/
+/*        background: #8c54ff;*/
+/*        color: #fff;*/
+/*        text-decoration: none;*/
+/*    }*/
+/*}*/

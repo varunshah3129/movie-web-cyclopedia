@@ -1,0 +1,40 @@
+/* CSS for horizontal scrolling */
+.genre_results {
+    margin-bottom: 20px;
+}
+
+.horizontal_scroll {
+    display: flex;
+    overflow: hidden;
+    position: relative;
+}
+
+/* Scroll buttons */
+.scroll-buttons {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    display: flex;
+    align-items: center;
+}
+
+.scroll-button {
+    background-color: rgba(0, 0, 0, 0.5);
+    border: none;
+    color: white;
+    padding: 10px;
+    cursor: pointer;
+    transition: background-color 0.3s ease; /* Add a smooth transition effect */
+}
+
+.scroll-button:hover {
+    background-color: rgba(0, 0, 0, 0.8);
+}
+
+.scroll-button.left {
+    left: 0;
+}
+
+.scroll-button.right {
+    right: 0;
+}

@@ -1,0 +1,345 @@
+/* Style for the main container */
+.entertainmentSearch {
+    margin: 0 auto;
+    padding: 20px;
+    /*border-radius: 8px;*/
+    /*box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);*/
+    /*background-color: #E0E0E0;*/
+}
+
+.filterOptions {
+    margin-bottom: 20px;
+}
+
+.filterOptions select {
+    font-size: 16px;
+    padding: 8px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    margin-right: 10px;
+}
+
+/* Style for search bar */
+.searchBar input {
+    width: 250px;
+    padding: 15px 58px 15px 20px;
+    font-size: 16px;
+    font-weight: 700;
+    letter-spacing: 0.3px;
+    background: #fff;
+    color: rgba(0, 0, 0, 0.87);
+    border-radius: 30px;
+    border: 0px;
+    box-shadow: 0 10px 20px rgba(0, 0, 0, 0.19), 0 6px 6px rgba(0, 0, 0, 0.23);
+}
+
+.searchBar button {
+    font-size: 16px;
+    background-color: transparent;
+    border: none;
+    cursor: pointer;
+    position: relative;
+    left: 220px;
+    transform: translateY(-50%);
+    color: rgba(0, 0, 0, 0.5);
+    bottom: 24px;
+}
+
+/* Style for categories */
+.categories {
+    margin: 20px 26px;
+}
+
+.categories button {
+    font-size: 14px;
+    padding: 8px 12px;
+    background-color: #eee;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    margin-right: 10px;
+}
+
+.categories button:hover {
+    background-color: #ddd;
+}
+
+/* Style for results */
+#display {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+    gap: 20px;
+}
+
+.result {
+    background-color: #fff;
+    padding: 15px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.result img {
+    max-width: 100%;
+    height: auto;
+}
+
+.result p {
+    margin: 10px 0;
+}
+
+
+
+@import url("https://fonts.googleapis.com/css2?family=Yusei+Magic&display=swap");
+
+*,
+*::before,
+*::after {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+body {
+    width: 100%;
+    font-family: "Yusei Magic", sans-serif;
+    background-color: #f8f8f8;
+}
+
+/* ScrollBar */
+body::-webkit-scrollbar {
+    width: 4px;
+}
+body::-webkit-scrollbar-track {
+    box-shadow: none;
+    background-color: #f8f8f8;
+}
+body::-webkit-scrollbar-thumb {
+    background-color: #0d6efd;
+    outline: 0px solid transparent;
+    border-radius: 0px;
+}
+img {
+    width: 100%;
+}
+h3 {
+    font-size: 18px;
+    letter-spacing: 0.5px;
+    color: rgba(0, 0, 0, 0.87);
+    text-transform: uppercase;
+}
+p {
+    font-size: 16px;
+    letter-spacing: 0.5px;
+    color: rgba(0, 0, 0, 0.87);
+}
+.mark {
+    color: #0d6efd;
+}
+
+/* NAV */
+nav {
+    position: relative;
+    width: 100%;
+    display: flex;
+    align-items: center;
+    flex-direction: column;
+    padding: 70px 0px 0px;
+}
+.logo {
+    display: block;
+    font-size: 48px;
+    font-weight: 700;
+    letter-spacing: 6px;
+    margin-bottom: 40px;
+    text-transform: uppercase;
+    color: rgba(0, 0, 0, 0.87);
+    text-decoration: none;
+}
+form {
+    position: relative;
+}
+
+::-webkit-input-placeholder {
+    text-transform: uppercase;
+}
+::-moz-placeholder {
+    text-transform: uppercase;
+}
+.search_input:focus {
+    border: 0;
+    outline: 0;
+}
+.search_icon {
+    position: absolute;
+    top: 10px;
+    right: 24px;
+}
+.search_icon img {
+    width: 20px;
+}
+.searchContainer {
+    top: 0;
+    position: fixed;
+    z-index: 5;
+    right: 0;
+}
+
+.searchBar {
+    position: absolute;
+    top: 0.5rem;
+    right: 0.5rem;
+    padding: 20px;
+    background-color: transparent;
+    z-index: 5;
+}
+
+.show_list_ul {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); /* Adjust the minmax values as needed */
+    grid-gap: 20px; /* Adjust the gap between items */
+    padding: 80px 80px;
+    list-style: none;
+}
+
+.show_list_item {
+    position: relative;
+    background: #fff;
+    border-radius: 6px;
+    overflow: hidden;
+    box-shadow: 0 10px 20px rgba(0, 0, 0, 0.19), 0 6px 6px rgba(0, 0, 0, 0.23);
+}
+
+.show_list_item img {
+    max-width: 100%;
+    height: auto;
+    border-radius: 6px;
+    display: block;
+    margin: 0 auto;
+}
+.movie_info {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 15px 15px;
+}
+.movie_info span {
+    font-size: 14px;
+    font-weight: 700;
+    border-radius: 6px;
+    padding: 5px;
+}
+.movie_info span.green {
+    color: rgba(144, 238, 144);
+    background: rgba(144, 238, 144, 0.2);
+}
+.movie_info span.orange {
+    color: rgba(255, 165, 0);
+    background: rgba(255, 165, 0, 0.2);
+}
+.movie_info span.red {
+    color: rgba(255, 0, 0);
+    background: rgba(255, 0, 0, 0.2);
+}
+
+.overview {
+    background-color: white;
+    padding: 2rem;
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    max-height: 100%;
+    transform: translateY(101%);
+    transition: transform 0.3s ease-in;
+}
+.show_list_item:hover .overview {
+    transform: translateY(0);
+}
+.overview h3 {
+    margin-bottom: 15px;
+    color: #0d6efd;
+}
+
+footer {
+    width: 100%;
+    padding: 50px 0px;
+    text-align: center;
+}
+footer p {
+    font-size: 18px;
+}
+
+
+/* RESPONSIVE */
+
+/* For Mobile */
+@media screen and (max-width: 767px) {
+    nav {
+        padding: 30px 0px 0px;
+    }
+    .logo {
+        margin-bottom: 30px;
+    }
+    .search_input {
+        width: 100%;
+    }
+    .search_icon {
+        top: 12px;
+    }
+    .show_list_ul {
+        grid-template-columns: repeat(1, 1fr);
+        grid-row-gap: 30px;
+        padding: 40px 15px;
+    }
+    .show_list_item img {
+        height: auto;
+    }
+}
+
+/* For Tab */
+@media screen and (min-width: 768px) and (max-width: 1024px) {
+    .show_list_ul {
+        grid-template-columns: repeat(2, 1fr);
+    }
+    .show_list_item img {
+        height: auto;
+    }
+}
+
+/* For Big Screens */
+@media screen and (min-width: 1599px) {
+    .show_list_ul {
+        grid-template-columns: repeat(4, 1fr);
+    }
+    .show_list_item img {
+        height: auto;
+    }
+}
+
+.goToTopButton {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    background-color: #007bff; /* Change the background color to your preference */
+    color: #fff; /* Change the text color to your preference */
+    border: none;
+    border-radius: 50%; /* Makes it round */
+    width: 50px; /* Adjust the width and height as needed */
+    height: 50px;
+    font-size: 24px; /* Adjust the font size as needed */
+    cursor: pointer;
+    transition: background-color 0.3s, transform 0.3s;
+}
+
+.goToTopButton:hover {
+    background-color: #0056b3; /* Change the background color on hover */
+}
+
+/* Add this to style the "Loading more..." text */
+.loadingMoreText {
+    text-align: center;
+    margin: 10px 0;
+    color: #007bff; /* Change the text color to your preference */
+    font-weight: bold;
+}

@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="ProjectModuleManager">
+    <modules>
+      <module fileurl="file://$PROJECT_DIR$/.idea/movie-web-cyclopedia.iml" filepath="$PROJECT_DIR$/.idea/movie-web-cyclopedia.iml" />
+      <module fileurl="file://$PROJECT_DIR$/../movie-web-pedia/.idea/movie-web-pedia.iml" filepath="$PROJECT_DIR$/../movie-web-pedia/.idea/movie-web-pedia.iml" />
+    </modules>
+  </component>
+</project>

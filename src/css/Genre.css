@@ -1,0 +1,34 @@
+/* CSS for the custom dropdown */
+.custom-dropdown {
+    position: absolute;
+    display: inline-block;
+    top: 142px;
+    left: 507px;
+}
+
+.custom-select {
+    appearance: none;
+    padding: 10px;
+    border: 1px solid #ccc;
+    border-radius: 5px;
+    background-color: #fff;
+    width: 100%;
+    font-size: 16px;
+    cursor: pointer;
+    outline: none;
+    z-index: 1;
+}
+
+.dropdown-icon {
+    position: absolute;
+    top: 50%;
+    right: 10px;
+    transform: translateY(-50%);
+    z-index: 2;
+}
+
+.genreSelect {
+    position: absolute;
+    top: 137px;
+    left: 456px;
+}

@@ -1,0 +1,95 @@
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap");
+
+:root {
+    --primary-color: #185ee0;
+    --secondary-color: #e6eef9;
+}
+
+*,
+*:after,
+*:before {
+    box-sizing: border-box;
+}
+
+.filter-region {
+    top: 110px;
+    position: fixed;
+    width: 100%;
+    height: 200px;
+    max-width: calc(32rem + 6vmin);
+    border-radius: 6px;
+    margin: auto;
+     border: 2px solid #53565a;
+    padding: 2.5rem;
+    background: #fff;
+    box-shadow: 0.5em 0.5em 0 0 #004D95;
+    z-index: 1000;
+    right: 20px;
+}
+
+.tabs {
+    width: 244px;
+    display: flex;
+    background-color: #fff;
+    box-shadow: 0 0 1px 0 rgba(24, 94, 224, 0.15), 0 6px 12px 0 rgba(24, 94, 224, 0.15);
+    padding: 0.75rem;
+    border-radius: 99px;
+    height: 54px;
+    position: absolute;
+    right: 20px;
+    top: 20px;
+
+}
+
+.tab {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 34px;
+    width: 180px;
+    font-size: 1.05rem;
+    font-weight: 500;
+    border-radius: 99px;
+    cursor: pointer;
+    transition: color 0.15s ease-in;
+    position: relative; /* Add this line */
+    z-index: 2; /* Add this line */
+}
+
+input[type="radio"] {
+    display: none;
+}
+
+input[type="radio"]:checked + label {
+    color: #004D95;
+}
+
+input[id="radio-movie"]:checked ~ .glider {
+    transform: translateX(0);
+}
+
+input[id="radio-tv"]:checked ~ .glider {
+    transform: translateX(100%);
+}
+
+.glider {
+    position: absolute;
+    display: flex;
+    height: 33px;
+    width: 110px;
+    background-color: var(--secondary-color);
+    z-index: 1;
+    border-radius: 99px;
+    transition: 0.25s ease-out;
+}
+
+@media (max-width: 700px) {
+    .tabs {
+        transform: scale(0.6);
+    }
+}
+.categories button.selected {
+    background-color: #007bff;
+    color: #fff;
+}
+
