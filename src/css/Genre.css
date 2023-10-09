@@ -29,6 +29,9 @@
 
 .genreSelect {
     position: absolute;
-    top: 137px;
-    left: 456px;
+    top: 21px;
+    right: 40px;
+}
+.genre_results {
+    padding: 60px 50px;
 }

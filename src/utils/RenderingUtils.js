@@ -2,14 +2,15 @@ import React, { useState, useEffect, useRef } from 'react';
 import config from '../config';
 import { getClassByRate } from './utils';
 import '../css/DropDown.css';
-import '../css/Modal.css';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faEllipsisVertical, faBookmark, faHeart } from '@fortawesome/free-solid-svg-icons';
-import axios from 'axios'; // Import Axios
+import axios from 'axios';
+import ModalMessage from "../components/ModalMessage";
+import { Link } from 'react-router-dom'; // Import Link from react-router-dom
 
-export function renderResults(results, handleDropdownClick, selectedItemId, sessionId, selectedMediaTypeUrl) {
+export function renderResults(results, handleDropdownClick, selectedItemId, sessionId, selectedMediaTypeUrl, selectedGenre, setSelectedGenre, mediaType) {
     // eslint-disable-next-line react-hooks/rules-of-hooks
-    const [openDropdownId, setOpenDropdownId] = useState(null);
+    const [openDropdownIds, setOpenDropdownIds] = useState({});
     // eslint-disable-next-line react-hooks/rules-of-hooks
     const [modalOpen, setModalOpen] = useState(false);
     // eslint-disable-next-line react-hooks/rules-of-hooks
@@ -18,6 +19,12 @@ export function renderResults(results, handleDropdownClick, selectedItemId, sess
     const dropdownContentRef = useRef(null);
     // eslint-disable-next-line react-hooks/rules-of-hooks
     const [genres, setGenres] = useState([]);
+    // eslint-disable-next-line react-hooks/rules-of-hooks
+    const [selectedOptionGenreId, setSelectedOptionGenreId] = useState(null);
+
+    const handleGenreSelection = (genreId) => {
+        setSelectedOptionGenreId(genreId);
+    };
 
     // eslint-disable-next-line react-hooks/rules-of-hooks
     useEffect(() => {
@@ -40,7 +47,7 @@ export function renderResults(results, handleDropdownClick, selectedItemId, sess
     useEffect(() => {
         function handleClickOutside(event) {
             if (dropdownContentRef.current && !dropdownContentRef.current.contains(event.target)) {
-                setOpenDropdownId(null);
+                setOpenDropdownIds({});
             }
         }
 
@@ -75,19 +82,22 @@ export function renderResults(results, handleDropdownClick, selectedItemId, sess
         fetchGenres();
     }, []);
 
-    const toggleDropdown = (itemId) => {
-        setOpenDropdownId((prevId) => (prevId === itemId ? null : itemId));
+    const toggleDropdown = (itemId, resultIndex) => {
+        setOpenDropdownIds((prevIds) => ({
+            ...prevIds,
+            [`${itemId}_${resultIndex}`]: !prevIds[`${itemId}_${resultIndex}`],
+        }));
     };
 
     const toggleModal = () => {
         setModalOpen((prevModalOpen) => !prevModalOpen);
     };
 
-    const handleDropdownButtonClick = (itemId) => {
-        toggleDropdown(itemId);
+    const handleDropdownButtonClick = (itemId, resultIndex) => {
+        toggleDropdown(itemId, resultIndex);
     };
 
-    const handleAddToWatchlist = (itemId) => {
+    const handleAddToWatchlist = (itemId, itemTitle) => {
         const apiKey = config.apiKey;
         const sessionId = localStorage.getItem('sessionID');
         const selectedMediaTypeLabel = document.querySelector('input[name="tabs"]:checked + label').textContent;
@@ -114,26 +124,77 @@ export function renderResults(results, handleDropdownClick, selectedItemId, sess
         })
             .then((response) => response.json())
             .then((data) => {
-                if (data.status_code === 1) {
-                    setModalMessage('Movie added to watchlist successfully.');
+                if (data.status_code === 1 && data.status_message === 'Success.') {
+                    setModalMessage(`${selectedMediaTypeUrl.toUpperCase()}:  ${itemTitle} added to watchlist successfully.`);
+                    toggleModal();
+                } else if (data.status_code === 12 && data.status_message === 'The item/record was updated successfully.') {
+                    setModalMessage(`${selectedMediaTypeUrl.toUpperCase()}:  ${itemTitle} is already added to watchlist.`);
                     toggleModal();
                 } else {
-                    console.error('Error adding movie to watchlist:', data.status_message);
-                    setModalMessage('Error adding movie to watchlist.');
-                    toggleModal();
+                    setModalMessage(`Error adding ${selectedMediaTypeUrl.toUpperCase()}:  ${itemTitle} to watchlist.`);
+                    toggleModal('error'); // Specify the messageType as 'error'
                 }
             })
             .catch((error) => {
-                console.error('Error adding movie to watchlist:', error);
-                setModalMessage('Error adding movie to watchlist.');
-                toggleModal();
+                setModalMessage(`Error adding ${selectedMediaTypeUrl.toUpperCase()}:  ${itemTitle} to watchlist.`);
+                toggleModal('error'); // Specify the messageType as 'error'
             });
     };
 
-    const handleAddToFavorites = (itemId) => {
-        // Make an API call to add the item to favorites
-        // You can use the TMDB API for this, following their documentation
-        // Example: axios.post('TMDB_API_URL_HERE', { itemId })
+    const handleAddToFavorites = (itemId, itemTitle) => {
+        const apiKey = config.apiAccessToken;
+        const sessionId = localStorage.getItem('sessionID');
+
+        const selectedMediaTypeLabel = document.querySelector('input[name="tabs"]:checked + label').textContent;
+        let selectedMediaTypeUrl = '';
+
+        if (selectedMediaTypeLabel === 'Movies') {
+            selectedMediaTypeUrl = 'movie';
+        } else if (selectedMediaTypeLabel === 'TV Shows') {
+            selectedMediaTypeUrl = 'tv';
+        }
+
+        if (!sessionId) {
+            console.error('Session ID not found in localStorage');
+            return;
+        }
+
+        const apiUrl = `https://api.themoviedb.org/3/account/${config.accountId}/favorite`;
+
+        const requestBody = {
+            media_type: `${selectedMediaTypeUrl}`,
+            media_id: itemId,
+            favorite: true,
+        };
+
+        axios
+            .post(apiUrl, requestBody, {
+                headers: {
+                    Authorization: `Bearer ${apiKey}`,
+                    'Content-Type': 'application/json',
+                },
+                params: {
+                    session_id: sessionId,
+                },
+            })
+            .then((response) => response.data)
+            .then((data) => {
+                if (data.status_code === 1) {
+                    setModalMessage(`${selectedMediaTypeUrl.toUpperCase()}:  ${itemTitle} added to favorite successfully.`);
+                    toggleModal();
+                } else if (data.status_code === 12) {
+                    setModalMessage(`${selectedMediaTypeUrl.toUpperCase()}:  ${itemTitle} is already added to favorite.`);
+                    toggleModal();
+                } else {
+                    setModalMessage(`Error adding ${selectedMediaTypeUrl.toUpperCase()}:  ${itemTitle} to favorite.`);
+                    toggleModal('error'); // Specify the messageType as 'error'
+                }
+            })
+            .catch((error) => {
+                console.error('Error:', error);
+                setModalMessage(`Error adding ${selectedMediaTypeUrl.toUpperCase()}:  ${itemTitle} to favorite.`);
+                toggleModal('error'); // Specify the messageType as 'error'
+            });
     };
 
     const getGenreNameById = (genreId) => {
@@ -143,83 +204,157 @@ export function renderResults(results, handleDropdownClick, selectedItemId, sess
 
     const resultsByGenre = {};
 
-    results.forEach((result) => {
-        result.genre_ids.forEach((genreId) => {
-            if (!resultsByGenre[genreId]) {
-                resultsByGenre[genreId] = [];
-            }
-            resultsByGenre[genreId].push(result);
+    if (Array.isArray(results)) {
+        results.forEach((result) => {
+            result.genre_ids.forEach((genreId) => {
+                if (!resultsByGenre[genreId]) {
+                    resultsByGenre[genreId] = [];
+                }
+                resultsByGenre[genreId].push(result);
+            });
         });
-    });
+    }
 
-    return (
-        <div className="movie_results">
-            {Object.keys(resultsByGenre).map((genreId, index) => (
-                <div key={index} className="genre_results">
-                    <h2>Genre: {getGenreNameById(parseInt(genreId))}</h2>
+    const renderGenreResults = () => {
+        if (selectedGenre === null || selectedGenre === undefined || selectedGenre === "") {
+            return Object.keys(resultsByGenre).map((genreId, index) => (
+                <div key={index} className={`genre_results ${selectedGenre ? 'hidden' : ''}`} id="not_genre_selected">
+                    <h2>
+                        Genre: {selectedOptionGenreId ? getGenreNameById(selectedOptionGenreId) : getGenreNameById(parseInt(genreId))}
+                    </h2>
                     <div className="horizontal_scroll">
-                        <ul className="show_list_ul" id={`genreUl_${genreId}`}>
-                            {resultsByGenre[genreId].map((result, resultIndex) => (
+                        <ul className={`show_list_ul ${selectedGenre ? 'hidden' : ''}`} id={`genreUl_${genreId}`}>
+                            {resultsByGenre[genreId] && resultsByGenre[genreId].map((result, resultIndex) => (
                                 <li key={resultIndex} className="show_list_item">
-                                    <div className={`dropdown ${openDropdownId === result.id ? 'open' : ''}`}>
+                                    <div className={`dropdown ${openDropdownIds[`${result.id}_${resultIndex}`] ? 'open' : ''}`}>
                                         <button
                                             className="dropdown-btn"
-                                            onClick={() => handleDropdownButtonClick(result.id)}
+                                            onClick={() => handleDropdownButtonClick(result.id, resultIndex)}
                                         >
                                             <FontAwesomeIcon icon={faEllipsisVertical} />
                                         </button>
-                                        {openDropdownId === result.id && (
+                                        <div className="movie-link">
+                                            {/* Add Link Component */}
+                                             <Link to={`/${mediaType}/${result.id}`}>
+                                                <img
+                                                    src={
+                                                        result.poster_path
+                                                            ? `${config.imagesURI}${config.imageSize}${result.poster_path}`
+                                                            : 'fallback_image_url'
+                                                    }
+                                                    alt={result.title || result.name}
+                                                />
+                                            </Link>
+                                            <div className="movie_info">
+                                                <h3>{result.title || result.name}</h3>
+                                                {result.release_date && (
+                                                    <div className="release_date" style={{ display: 'block' }}>
+                                                        <h4>Release Date:</h4>
+                                                        <p>{result.release_date}</p>
+                                                    </div>
+                                                )}
+                                                <span className={getClassByRate(result.vote_average)}>
+                                                    {result.vote_average}
+                                                </span>
+                                            </div>
+                                            <div className="overview">
+                                                <h3>Overview</h3>
+                                                <p>{result.overview}</p>
+                                            </div>
+                                        </div>
+                                        {openDropdownIds[`${result.id}_${resultIndex}`] && (
                                             <div className="dropdown-content" ref={dropdownContentRef}>
-                                                <button onClick={() => handleAddToWatchlist(result.id)}>
+                                                <button onClick={() => handleAddToWatchlist(result.id, result.title)}>
                                                     <FontAwesomeIcon icon={faBookmark} /> Add to Watchlist
                                                 </button>
-                                                <button onClick={() => handleAddToFavorites(result.id)}>
+                                                <button onClick={() => handleAddToFavorites(result.id, result.title)}>
                                                     <FontAwesomeIcon icon={faHeart} /> Favorite
                                                 </button>
                                             </div>
                                         )}
-                                    </div>
-                                    <img
-                                        src={
-                                            result.poster_path
-                                                ? `${config.imagesURI}${config.imageSize}${result.poster_path}`
-                                                : 'fallback_image_url'
-                                        }
-                                        alt={result.title || result.name}
-                                    />
-                                    <div className="movie_info">
-                                        <h3>{result.title || result.name}</h3>
-                                        <div className="release_date" style={{ display: 'block' }}>
-                                            <h4>Release Date:</h4>
-                                            <p>{result.release_date}</p>
-                                        </div>
-                                        <span className={getClassByRate(result.vote_average)}>
-                                            {result.vote_average}
-                                        </span>
-                                    </div>
-                                    <div className="overview">
-                                        <h3>Overview</h3>
-                                        <p>{result.overview}</p>
                                     </div>
                                 </li>
                             ))}
                         </ul>
                     </div>
                 </div>
-            ))}
-            {modalOpen && (
-                <div className="modal__backdrop">
-                    <div className="modal__container">
-                        <button type="button" onClick={() => setModalOpen(false)}>
-                            Close this modal
-                        </button>
-                        <div className="placeholder" />
-                        <div className="placeholder" />
-                        <div className="placeholder medium" />
-                        <div className="placeholder" />
-                        <p>{modalMessage}</p>
+            ));
+        } else {
+            return (
+                <div className={`genre_results ${selectedGenre ? 'show' : ''}`} id={`genre_selected_${selectedGenre}`}>
+                    <h2>
+                        Genre: {selectedOptionGenreId ? getGenreNameById(selectedOptionGenreId) : getGenreNameById(parseInt(selectedGenre))}
+                    </h2>
+                    <div className="horizontal_scroll">
+                        <ul className={`show_list_ul ${selectedGenre ? '' : 'hidden'}`} id={`genreUl_selected_${selectedGenre}`}>
+                            {resultsByGenre[selectedGenre] && resultsByGenre[selectedGenre].map((result, resultIndex) => (
+                                <li key={resultIndex} className="show_list_item">
+                                    <div className={`dropdown ${openDropdownIds[`${result.id}_${resultIndex}`] ? 'open' : ''}`}>
+                                        <button
+                                            className="dropdown-btn"
+                                            onClick={() => handleDropdownButtonClick(result.id, resultIndex)}
+                                        >
+                                            <FontAwesomeIcon icon={faEllipsisVertical} />
+                                        </button>
+                                        <div className="movie-link">
+                                            {/* Add Link Component */}
+                                             <Link to={`/${mediaType}/${result.id}`}>
+                                                <img
+                                                    src={
+                                                        result.poster_path
+                                                            ? `${config.imagesURI}${config.imageSize}${result.poster_path}`
+                                                            : 'fallback_image_url'
+                                                    }
+                                                    alt={result.title || result.name}
+                                                />
+                                            </Link>
+                                            <div className="movie_info">
+                                                <h3>{result.title || result.name}</h3>
+                                                {result.release_date && (
+                                                    <div className="release_date" style={{ display: 'block' }}>
+                                                        <h4>Release Date:</h4>
+                                                        <p>{result.release_date}</p>
+                                                    </div>
+                                                )}
+                                                <span className={getClassByRate(result.vote_average)}>
+                                                    {result.vote_average}
+                                                </span>
+                                            </div>
+                                            <div className="overview">
+                                                <h3>Overview</h3>
+                                                <p>{result.overview}</p>
+                                            </div>
+                                        </div>
+                                        {openDropdownIds[`${result.id}_${resultIndex}`] && (
+                                            <div className="dropdown-content" ref={dropdownContentRef}>
+                                                <button onClick={() => handleAddToWatchlist(result.id, result.title)}>
+                                                    <FontAwesomeIcon icon={faBookmark} /> Add to Watchlist
+                                                </button>
+                                                <button onClick={() => handleAddToFavorites(result.id, result.title)}>
+                                                    <FontAwesomeIcon icon={faHeart} /> Favorite
+                                                </button>
+                                            </div>
+                                        )}
+                                    </div>
+                                </li>
+                            ))}
+                        </ul>
                     </div>
                 </div>
+            );
+        }
+    };
+
+    return (
+        <div className={`movie_results ${selectedGenre ? 'hidden' : ''}`}>
+            {renderGenreResults()}
+            {modalOpen && (
+                <ModalMessage
+                    isOpen={modalOpen}
+                    closeModal={() => setModalOpen(false)}
+                    messageType={modalMessage.startsWith('Error') ? 'error' : 'success'}
+                    message={modalMessage}
+                />
             )}
         </div>
     );

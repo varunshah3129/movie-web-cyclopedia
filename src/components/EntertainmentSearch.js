@@ -47,7 +47,7 @@ function EntertainmentSearch() {
             loadMoreResults();
         }
 
-        // Show/hide "Go to Top" button after certain scroll position
+        // Show/hide "Go to Top" button after a certain scroll position
         if (window.scrollY > 400) {
             setShowGoToTop(true);
         } else {
@@ -88,7 +88,7 @@ function EntertainmentSearch() {
 
             // Create the query parameters object
             const queryParams = {
-                api_key: config.apiKey,
+                api_key: config.apiAccessToken,
             };
 
             // Add a query parameter if a search query is provided
@@ -100,7 +100,7 @@ function EntertainmentSearch() {
                 .get(apiUrl, {
                     params: queryParams,
                     headers: {
-                        Authorization: `Bearer ${config.apiKey}`,
+                        Authorization: `Bearer ${config.apiAccessToken}`,
                         'Content-Type': 'application/json',
                     },
                 })
@@ -159,7 +159,7 @@ function EntertainmentSearch() {
 
             // Create the query parameters object
             const queryParams = {
-                api_key: config.apiKey,
+                api_key: config.apiAccessToken,
                 include_adult: 'false',
                 include_video: 'false',
                 language: 'en-US',
@@ -171,7 +171,7 @@ function EntertainmentSearch() {
                 .get(apiUrl, {
                     params: queryParams,
                     headers: {
-                        Authorization: `Bearer ${config.apiKey}`,
+                        Authorization: `Bearer ${config.apiAccessToken}`,
                         'Content-Type': 'application/json',
                     },
                 })
@@ -208,6 +208,7 @@ function EntertainmentSearch() {
             <EntertainmentOptions
                 onOptionChange={handleOptionChange}
                 onCategoryClick={handleCategoryClick}
+                mediaType={selectedOption} // Pass the selected media type to EntertainmentOptions
             />
             <div className="searchContainer">
                 <div className="searchBar">

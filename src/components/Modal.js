@@ -21,8 +21,9 @@ const Modal = ({ isOpen, onRequestClose, onAuthenticate }) => {
     }, [isOpen, onRequestClose]);
 
     return (
-        <div className={`modal__backdrop ${isOpen ? 'open' : ''}`}>
-            <div className="modal__container">
+        <div className={`modal__backdrop__main ${isOpen ? 'open' : ''}`}>
+            <div className="modal__container__main">
+                <h4 className="modal__title">Authenticate</h4>
                 <button type="button" onClick={onRequestClose}>
                     Close this modal
                 </button>

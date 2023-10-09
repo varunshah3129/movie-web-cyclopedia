@@ -13,13 +13,13 @@
 //     const [results, setResults] = useState([]);
 //
 //     useEffect(() => {
-//         const apiKey = config.apiKey;
-//         const apiUrl = `https://api.themoviedb.org/3/genre/movie/list?api_key=${apiKey}&language=en-US`;
+//         const apiAccessToken = config.apiAccessToken;
+//         const apiUrl = `https://api.themoviedb.org/3/genre/movie/list?api_key=${apiAccessToken}&language=en-US`;
 //
 //         axios
 //             .get(apiUrl, {
 //                 headers: {
-//                     Authorization: `Bearer ${config.apiKey}`,
+//                     Authorization: `Bearer ${config.apiAccessToken}`,
 //                     'Content-Type': 'application/json',
 //                 },
 //             })
@@ -34,7 +34,7 @@
 //
 //     const handleGenreChange = (newGenre) => {
 //         setSelectedGenre(newGenre);
-//         const apiKey = config.apiKey;
+//         const apiAccessToken = config.apiAccessToken;
 //         const selectedMediaTypeLabel = document.querySelector('input[name="tabs"]:checked + label').textContent;
 //         console.log(selectedMediaTypeLabel);
 //         if (selectedMediaTypeLabel === 'Movies') {
@@ -45,10 +45,10 @@
 //         }
 //         if (newGenre !== '') {
 //             const genreQueryParam = `&with_genres=${newGenre}`;
-//             const apiUrl = `https://api.themoviedb.org/3/discover/${selectedMediaTypeUrl}?api_key=${apiKey}${genreQueryParam}`;
+//             const apiUrl = `https://api.themoviedb.org/3/discover/${selectedMediaTypeUrl}?api_key=${apiAccessToken}${genreQueryParam}`;
 //
 //             const headers = {
-//                 Authorization: `Bearer ${config.apiKey}`,
+//                 Authorization: `Bearer ${config.apiAccessToken}`,
 //                 'Content-Type': 'application/json',
 //             };
 //

@@ -1,19 +1,24 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
+import { BrowserRouter as Router, Route, Routes } from 'react-router-dom';
 import EntertainmentSearch from './components/EntertainmentSearch';
 import Modal from './components/Modal';
 import Header from './components/Header';
+import WatchList from './components/WatchList'; // Import the WatchList component
 import './css/App.css';
 import axios from 'axios';
 import config from './config';
+import Favorites from "./components/Favorites";
+import MovieDetailPage from "./components/MovieDetailPage";
+import TVShowDetailPage from "./components/TVShowDetailPage";
 
 // Function to get the request token
-const getRequestToken = async (apiKey) => {
+const getRequestToken = async (apiAccessToken) => {
     const apiUrl = `https://api.themoviedb.org/3/authentication/token/new`;
 
     try {
         const response = await axios.get(apiUrl, {
             headers: {
-                Authorization: `Bearer ${apiKey}`,
+                Authorization: `Bearer ${apiAccessToken}`,
                 'Content-Type': 'application/json',
             },
         });
@@ -28,7 +33,7 @@ const getRequestToken = async (apiKey) => {
 
 // Function to get the session ID
 const getSessionId = async (requestToken) => {
-    const apiKey = config.apiKey;
+    const apiAccessToken = config.apiAccessToken;
     const apiUrl = `https://api.themoviedb.org/3/authentication/session/new`;
 
     const requestData = {
@@ -38,7 +43,7 @@ const getSessionId = async (requestToken) => {
     console.log(requestToken);
 
     const headers = {
-        Authorization: `Bearer ${apiKey}`,
+        Authorization: `Bearer ${apiAccessToken}`,
         accept: 'application/json',
         'content-type': 'application/json',
     };
@@ -57,16 +62,17 @@ const getSessionId = async (requestToken) => {
         console.error('Error getting session ID:', error);
     }
 };
+
 export function App() {
     const [sessionID, setSessionID] = useState(localStorage.getItem('sessionID'));
     const [showModal, setShowModal] = useState(!sessionID);
 
     const handleAuthenticateClick = async () => {
         // Session ID is missing, show the authentication modal
-        const apiKey = config.apiKey;
+        const apiAccessToken = config.apiAccessToken;
 
         try {
-            const requestToken = await getRequestToken(apiKey);
+            const requestToken = await getRequestToken(apiAccessToken);
             const authUrl = `https://www.themoviedb.org/authenticate/${requestToken}`;
 
             const popup = window.open(
@@ -102,31 +108,40 @@ export function App() {
     };
 
     return (
-        <div className="app-container">
-            <Header />
-            <main className="app-main">
-                <div className="content-container">
-                    <EntertainmentSearch />
+        <Router>
+            <div className="app-container">
+                <Header />
+                <main className="app-main">
+                    <div className="content-container">
+                        <Routes>
+                            <Route path="/watchlist/movies" element={<WatchList type="movies" />} />
+                            <Route path="/watchlist/tv" element={<WatchList type="tv" />} />
+                            <Route path="/favorites/movies" element={<Favorites type="movies" />} />
+                            <Route path="/favorites/tv" element={<Favorites type="tv" />} />
+                            <Route path="/movie/:id" element={<MovieDetailPage />} /> {/* Add this route */}
+                            <Route path="/tvshow/:id" element={<TVShowDetailPage />} /> {/* Add this route */}
+                            <Route path="/" element={<EntertainmentSearch />} />
+                        </Routes>
+                    </div>
+                </main>
+                <div>
+                    {sessionID && (
+                        <button onClick={clearLocalStorage}>Clear localStorage</button>
+                    )}
                 </div>
-            </main>
-            <div>
-                {sessionID && (
-                    <button onClick={clearLocalStorage}>Clear localStorage</button>
+                <footer className="app-footer">
+                    <p>&copy; {new Date().getFullYear()} MOVIEPEDIA. All rights reserved.</p>
+                </footer>
+                {sessionID === null && (
+                    <Modal
+                        isOpen={showModal}
+                        onRequestClose={() => setShowModal(false)}
+                        onAuthenticate={handleAuthenticateClick}
+                    />
                 )}
             </div>
-            <footer className="app-footer">
-                <p>&copy; {new Date().getFullYear()} MOVIEPEDIA. All rights reserved.</p>
-            </footer>
-            {sessionID === null && (
-                <Modal
-                    isOpen={showModal}
-                    onRequestClose={() => setShowModal(false)}
-                    onAuthenticate={handleAuthenticateClick}
-                />
-            )}
-        </div>
+        </Router>
     );
 }
-
 
 export default App;

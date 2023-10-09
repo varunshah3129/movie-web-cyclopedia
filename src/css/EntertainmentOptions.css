@@ -15,16 +15,18 @@
     top: 110px;
     position: fixed;
     width: 100%;
-    height: 200px;
-    max-width: calc(32rem + 6vmin);
-    border-radius: 6px;
+    height: 100px;
+    max-width: calc(45rem + 6vmin);
     margin: auto;
-     border: 2px solid #53565a;
     padding: 2.5rem;
     background: #fff;
-    box-shadow: 0.5em 0.5em 0 0 #004D95;
     z-index: 1000;
+    border-radius: 30px;
+    border: 0px;
+    box-shadow: 0 10px 20px rgba(0, 0, 0, 0.19), 0 6px 6px rgba(0, 0, 0, 0.23);
+    /*left: 50%;*/
     right: 20px;
+    /*transform: translateX(-50%);*/
 }
 
 .tabs {
@@ -36,7 +38,7 @@
     border-radius: 99px;
     height: 54px;
     position: absolute;
-    right: 20px;
+    /*right: 20px;*/
     top: 20px;
 
 }
@@ -93,3 +95,8 @@ input[id="radio-tv"]:checked ~ .glider {
     color: #fff;
 }
 
+.categorySelect {
+    position: absolute;
+    top: 21px;
+    left: 300px;
+}
