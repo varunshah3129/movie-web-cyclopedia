@@ -235,7 +235,7 @@ export function renderResults(results, handleDropdownClick, selectedItemId, sess
                                         </button>
                                         <div className="movie-link">
                                             {/* Add Link Component */}
-                                             <Link to={`/${mediaType}/${result.id}`}>
+                                            <Link to={`/${mediaType === 'movie' ? 'movie' : 'tv'}/${result.id}`}>
                                                 <img
                                                     src={
                                                         result.poster_path
@@ -298,7 +298,7 @@ export function renderResults(results, handleDropdownClick, selectedItemId, sess
                                         </button>
                                         <div className="movie-link">
                                             {/* Add Link Component */}
-                                             <Link to={`/${mediaType}/${result.id}`}>
+                                            <Link to={`/${mediaType === 'movie' ? 'movie' : 'tv'}/${result.id}`}>
                                                 <img
                                                     src={
                                                         result.poster_path
