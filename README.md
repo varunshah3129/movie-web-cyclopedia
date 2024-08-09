@@ -1,2 +1,1 @@
-This is a small app using TMDB api where you can fetch movies and TV shows and also authenticate session ID to add movies to watch list.
-App is still under progress for more features like Add to favorites, my watchlist, my favorites, some better UI and IMDB ratings.
+This app uses the TMDB API to fetch movies and TV shows. It also allows users to authenticate their session ID in order to add movies to their watch list. The app is still a work in progress, and we plan to add more features such as "Add to Favorites," "My Watchlist," "My Favorites," improved UI, and IMDB ratings.
