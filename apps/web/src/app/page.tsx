@@ -111,6 +111,16 @@ function PosterGrid({ items, keyPrefix }: { items: Array<TmdbMedia | TmdbTrendin
   );
 }
 
+function pickYouTubePreviewKey(videos: Array<{ site: string; type: string; key: string }>): string | null {
+  return (
+    videos.find((video) => video.site === "YouTube" && video.type === "Trailer")?.key ??
+    videos.find((video) => video.site === "YouTube" && video.type === "Teaser")?.key ??
+    videos.find((video) => video.site === "YouTube" && video.type === "Clip")?.key ??
+    videos.find((video) => video.site === "YouTube")?.key ??
+    null
+  );
+}
+
 export default async function Home() {
   let trending: TmdbTrendingItem[] = [];
   let theatricalThisWeek: TmdbMedia[] = [];
@@ -272,7 +282,7 @@ export default async function Home() {
       const details = await Promise.all(
         monthTop10.map(async (item) => {
           const [videosRes, creditsRes] = await Promise.all([getMediaVideos("movie", item.id), getMediaCredits("movie", item.id)]);
-          const trailer = videosRes.results.find((video) => video.site === "YouTube" && video.type === "Trailer") ?? null;
+          const trailerKey = pickYouTubePreviewKey(videosRes.results);
           const castNames = creditsRes.cast.slice(0, 3).map((cast) => cast.name);
           const genreNames = (item.genre_ids ?? [])
             .map((id) => movieGenresResponse.genres.find((genre) => genre.id === id)?.name)
@@ -287,7 +297,7 @@ export default async function Home() {
             posterPath: item.poster_path ?? null,
             genres: genreNames,
             cast: castNames,
-            trailerKey: trailer?.key ?? null,
+            trailerKey,
           };
         }),
       );
@@ -320,7 +330,23 @@ export default async function Home() {
         .filter((slide) => Boolean(slide.backdropPath || slide.posterPath));
       const existingIds = new Set(heroSlides.map((slide) => slide.id));
       const uniqueFallback = fallbackSlides.filter((slide) => !existingIds.has(slide.id));
-      heroSlides = [...heroSlides, ...uniqueFallback].slice(0, 8);
+      const enrichedFallback = await Promise.all(
+        uniqueFallback.slice(0, 8).map(async (slide) => {
+          try {
+            const videosRes = await getMediaVideos(slide.mediaType, slide.id);
+            return { ...slide, trailerKey: pickYouTubePreviewKey(videosRes.results) };
+          } catch {
+            return slide;
+          }
+        }),
+      );
+      heroSlides = [...heroSlides, ...enrichedFallback].slice(0, 8);
+    }
+    const withPlayableTrailer = heroSlides.filter((slide) => Boolean(slide.trailerKey));
+    if (withPlayableTrailer.length > 0) {
+      const withTrailerIds = new Set(withPlayableTrailer.map((slide) => slide.id));
+      const withoutPlayableTrailer = heroSlides.filter((slide) => !withTrailerIds.has(slide.id));
+      heroSlides = [...withPlayableTrailer, ...withoutPlayableTrailer];
     }
   } catch {
     trending = [];

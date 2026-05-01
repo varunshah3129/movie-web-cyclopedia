@@ -46,7 +46,6 @@ export function HomeHeroCarousel({ slides }: HomeHeroCarouselProps) {
   const goTo = (nextIndex: number) => {
     if (!canNavigate || nextIndex === activeIndex || transitioning) return;
     setTransitioning(true);
-    setHoverPreview(false);
     setActiveIndex((nextIndex + slides.length) % slides.length);
     window.setTimeout(() => setTransitioning(false), 120);
   };
@@ -82,6 +81,7 @@ export function HomeHeroCarousel({ slides }: HomeHeroCarouselProps) {
             }`}
           >
             <iframe
+              key={`hero-preview-${active.id}-${active.trailerKey}`}
               className="h-full w-full"
               src={`https://www.youtube.com/embed/${active.trailerKey}?autoplay=1&mute=1&controls=0&loop=1&playlist=${active.trailerKey}&modestbranding=1&rel=0`}
               title={`${active.title} hover preview`}
@@ -111,16 +111,22 @@ export function HomeHeroCarousel({ slides }: HomeHeroCarouselProps) {
               {activeCast.length > 0 ? <p className="mt-2 text-xs text-white/70">Cast: {activeCast.join(" • ")}</p> : null}
 
               <div className="mt-4 flex flex-wrap items-end gap-3">
-                {active.trailerKey ? (
-                  <button
-                    type="button"
-                    className="inline-flex items-center gap-2 rounded-md bg-[var(--brand)] px-4 py-2 text-sm font-semibold text-white hover:brightness-110"
-                    onClick={() => setPlayerOpen(true)}
-                  >
-                    <Play size={16} fill="currentColor" aria-hidden />
-                    Watch Trailer
-                  </button>
-                ) : null}
+                <button
+                  type="button"
+                  className={`inline-flex items-center gap-2 rounded-md px-4 py-2 text-sm font-semibold text-white ${
+                    active.trailerKey
+                      ? "bg-[var(--brand)] hover:brightness-110"
+                      : "cursor-not-allowed border border-white/25 bg-black/35 text-white/65"
+                  }`}
+                  onClick={() => {
+                    if (!active.trailerKey) return;
+                    setPlayerOpen(true);
+                  }}
+                  aria-disabled={!active.trailerKey}
+                >
+                  <Play size={16} fill="currentColor" aria-hidden />
+                  {active.trailerKey ? "Watch Trailer" : "Trailer unavailable"}
+                </button>
               </div>
             </div>
 
