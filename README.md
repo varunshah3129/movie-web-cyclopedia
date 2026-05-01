@@ -75,11 +75,30 @@ npm run start -w @movie/mobile -- --clear
 The app needs TMDB keys for full functionality. Set environment variables in your local setup:
 
 - Web (`apps/web/.env.local`) should include:
+  - `NEXTAUTH_URL`
+  - `NEXTAUTH_SECRET`
+  - `TMDB_API_KEY`
+  - `TMDB_READ_ACCESS_TOKEN`
   - `NEXT_PUBLIC_TMDB_API_KEY`
 - Mobile (Expo environment) should include:
   - `EXPO_PUBLIC_TMDB_API_KEY`
 
 Optional TMDB account/session values can be set for advanced account flows, but runtime TMDB connect is already supported in app.
+
+Use the committed templates as a safe starting point:
+
+- `apps/web/.env.example`
+- `apps/mobile/.env.example`
+
+Copy them to `.env.local` (web) or `.env` (mobile) and add your own keys. Do not commit real secrets.
+
+## Security Checklist
+
+- Keep your GitHub repository private if the code is proprietary.
+- Never commit `.env` files or API secrets.
+- In Vercel, set env vars per environment and redeploy after edits.
+- Set `NEXTAUTH_URL` to your exact production domain used for TMDB connect.
+- Rotate keys immediately if they are ever exposed.
 
 ## Portfolio Snapshot Automation
 
