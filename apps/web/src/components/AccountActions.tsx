@@ -1,24 +1,37 @@
 "use client";
 
 import { Bookmark, Heart, List, Play, Star } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useState } from "react";
+import { createPortal } from "react-dom";
 import { parseTmdbRatedTenPoint, type MediaType } from "@movie/core";
+import { showActionToast } from "@/components/ActionToastHost";
 
 interface AccountActionsProps {
   mediaType: MediaType;
   mediaId: number;
+  mediaTitle?: string;
   initialFavorite?: boolean;
   initialWatchlist?: boolean;
   initialRated?: number | null;
   trailerKey?: string | null;
   trailerTitle?: string;
 }
-type ActionType = "favorite" | "watchlist" | "rate" | "unrate";
+type ActionType = "favorite" | "watchlist" | "rate" | "unrate" | "list";
 
-export function AccountActions({ mediaType, mediaId, initialFavorite = false, initialWatchlist = false, initialRated = null, trailerKey = null, trailerTitle = "Trailer" }: AccountActionsProps) {
+export function AccountActions({
+  mediaType,
+  mediaId,
+  mediaTitle = "Title",
+  initialFavorite = false,
+  initialWatchlist = false,
+  initialRated = null,
+  trailerKey = null,
+  trailerTitle = "Trailer",
+}: AccountActionsProps) {
   const actionStateKey = `tmdb_action_state_${mediaType}_${mediaId}`;
+  const canUseDOM = typeof window !== "undefined";
   const cachedState =
-    typeof window !== "undefined"
+    canUseDOM
       ? (() => {
           const raw = window.localStorage.getItem(actionStateKey);
           if (!raw) return null;
@@ -34,14 +47,14 @@ export function AccountActions({ mediaType, mediaId, initialFavorite = false, in
   const [rated, setRatedState] = useState<number | null>(typeof cachedState?.ratedValue === "number" ? cachedState.ratedValue * 2 : initialRated);
   const [ratingPickerOpen, setRatingPickerOpen] = useState(false);
   const [selectedRating, setSelectedRating] = useState(4);
-  const [status, setStatus] = useState<string>("");
+  const [customListId, setCustomListId] = useState<number | null>(() => {
+    if (!canUseDOM) return null;
+    const raw = window.localStorage.getItem("tmdb_custom_list_id");
+    if (!raw) return null;
+    const parsed = Number(raw);
+    return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
+  });
   const [trailerOpen, setTrailerOpen] = useState(false);
-
-  useEffect(() => {
-    if (!status) return;
-    const timer = window.setTimeout(() => setStatus(""), 1800);
-    return () => window.clearTimeout(timer);
-  }, [status]);
 
   async function callAction(action: ActionType, payload: Record<string, unknown>) {
     const sessionId = typeof window !== "undefined" ? window.localStorage.getItem("tmdb_session_id") : null;
@@ -57,6 +70,8 @@ export function AccountActions({ mediaType, mediaId, initialFavorite = false, in
       }
       const result = (await response.json()) as {
         accountStates?: { favorite: boolean; watchlist: boolean; rated: { value: number } | boolean } | null;
+        listId?: number;
+        listName?: string;
       };
       const states = result.accountStates ?? null;
       if (states) {
@@ -83,10 +98,31 @@ export function AccountActions({ mediaType, mediaId, initialFavorite = false, in
         ratedValue: newRatedTen !== null ? newRatedTen / 2 : null,
       };
       window.localStorage.setItem(actionStateKey, JSON.stringify(nextState));
+      if (action === "list" && result.listId && Number.isInteger(result.listId)) {
+        setCustomListId(result.listId);
+        window.localStorage.setItem("tmdb_custom_list_id", String(result.listId));
+      }
       window.dispatchEvent(new Event("tmdb-account-updated"));
-      setStatus("Updated");
+      if (action === "list") {
+        showActionToast(`${mediaTitle} added to ${result.listName ?? "your TMDB list"}`, "success");
+      } else if (action === "rate" && typeof payload.value === "number") {
+        showActionToast(`${mediaTitle} rated ${(Number(payload.value) / 2).toFixed(1)}/5`, "success");
+      } else if (action === "unrate") {
+        showActionToast(`Rating removed for ${mediaTitle}`, "success");
+      } else {
+        showActionToast(
+          action === "favorite"
+            ? Boolean(payload.value)
+              ? `${mediaTitle} added to favorites`
+              : `${mediaTitle} removed from favorites`
+            : Boolean(payload.value)
+              ? `${mediaTitle} added to watchlist`
+              : `${mediaTitle} removed from watchlist`,
+          "success",
+        );
+      }
     } catch {
-      setStatus("Connect TMDB account first from Sign In page.");
+      showActionToast("Connect TMDB account first from Sign In page.", "error");
     }
   }
 
@@ -103,7 +139,9 @@ export function AccountActions({ mediaType, mediaId, initialFavorite = false, in
         ) : null}
         <button
           className="group inline-flex flex-col items-center gap-1"
-          onClick={() => setStatus("List feature next")}
+          onClick={() => {
+            void callAction("list", { listId: customListId ?? undefined, listName: "Moviepedia Picks" });
+          }}
           type="button"
         >
           <span className="inline-flex size-12 items-center justify-center rounded-full border border-white/40 bg-transparent text-white transition group-hover:bg-white/10">
@@ -164,7 +202,33 @@ export function AccountActions({ mediaType, mediaId, initialFavorite = false, in
       <div className="mt-2 text-xs text-white/75">
         {favorite ? "Favorite on" : "Favorite off"} • {watchlist ? "Watchlist on" : "Watchlist off"} • {rated !== null ? `Rated ${(rated / 2).toFixed(1)}/5` : "Not rated"}
       </div>
-      {status ? <span className="mt-1 block text-xs text-white/60">{status}</span> : null}
+      {canUseDOM && trailerOpen && trailerKey
+        ? createPortal(
+            <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/85 p-4">
+              <div className="w-full max-w-5xl">
+                <div className="mb-2 flex items-start justify-between gap-4 px-3">
+                  <div>
+                    <p className="text-xs uppercase tracking-[0.16em] text-white/55">Trailer</p>
+                    <h3 className="line-clamp-1 text-lg font-semibold text-white">{trailerTitle}</h3>
+                  </div>
+                  <button type="button" className="rounded-md border border-white/25 px-3 py-1 text-sm text-white/85 hover:bg-white/10" onClick={() => setTrailerOpen(false)}>
+                    Close
+                  </button>
+                </div>
+                <div className="aspect-video w-full bg-black">
+                  <iframe
+                    className="h-full w-full"
+                    src={`https://www.youtube.com/embed/${trailerKey}?autoplay=1&rel=0`}
+                    title={`${trailerTitle} player`}
+                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                    allowFullScreen
+                  />
+                </div>
+              </div>
+            </div>,
+            document.body,
+          )
+        : null}
       {ratingPickerOpen ? (
         <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/60 p-4">
           <div className="w-full max-w-xs rounded-lg bg-white p-4 text-black shadow-xl">
@@ -192,27 +256,6 @@ export function AccountActions({ mediaType, mediaId, initialFavorite = false, in
               >
                 Rate now
               </button>
-            </div>
-          </div>
-        </div>
-      ) : null}
-      {trailerOpen && trailerKey ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85">
-          <div className="w-full max-w-6xl">
-            <div className="mb-2 flex items-center justify-between px-3 text-white">
-              <p className="line-clamp-1 text-sm font-semibold">{trailerTitle}</p>
-              <button type="button" className="rounded border border-white/30 px-2 py-1 text-xs" onClick={() => setTrailerOpen(false)}>
-                Close
-              </button>
-            </div>
-            <div className="aspect-video w-full bg-black">
-              <iframe
-                className="h-full w-full"
-                src={`https://www.youtube.com/embed/${trailerKey}?autoplay=1&rel=0`}
-                title={`${trailerTitle} player`}
-                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                allowFullScreen
-              />
             </div>
           </div>
         </div>

@@ -1,12 +1,12 @@
 "use client";
 
-import { getAccountFavorites, getAccountRated, getAccountWatchlist, type MediaType, type TmdbMedia } from "@movie/core";
+import { getAccountFavorites, getAccountLists, getAccountRated, getAccountWatchlist, getListDetails, type MediaType, type TmdbMedia } from "@movie/core";
 import { AppHeader } from "@/components/AppHeader";
 import { MediaGridSkeleton } from "@/components/MediaGridSkeleton";
 import { MediaPosterCard } from "@/components/MediaPosterCard";
 import { useCallback, useEffect, useState } from "react";
 
-type LibraryTab = "watchlist" | "favorites" | "rated";
+type LibraryTab = "watchlist" | "favorites" | "rated" | "lists";
 
 function titleOf(item: TmdbMedia): string {
   return "title" in item ? item.title : item.name;
@@ -33,6 +33,28 @@ export default function LibraryPage() {
       if (!sessionId || !accountId) {
         throw new Error("missing-session");
       }
+      if (tab === "lists") {
+        const preferredListIdRaw = window.localStorage.getItem("tmdb_custom_list_id");
+        const preferredListId = preferredListIdRaw ? Number(preferredListIdRaw) : null;
+        let targetListId = preferredListId && Number.isInteger(preferredListId) && preferredListId > 0 ? preferredListId : null;
+        if (!targetListId) {
+          const lists = await getAccountLists(1, sessionId, accountId);
+          const matched = lists.results.find((item) => item.name.toLowerCase() === "moviepedia picks");
+          targetListId = matched?.id ?? null;
+          if (targetListId) {
+            window.localStorage.setItem("tmdb_custom_list_id", String(targetListId));
+          }
+        }
+        if (!targetListId) {
+          setItems([]);
+          setError("No TMDB custom list yet. Use 'Add to list' on any title to create Moviepedia Picks.");
+          return;
+        }
+        const details = await getListDetails(targetListId, sessionId);
+        setItems(details.items ?? []);
+        return;
+      }
+
       const response =
         tab === "watchlist"
           ? await getAccountWatchlist(mediaType, 1, sessionId, accountId)
@@ -69,7 +91,7 @@ export default function LibraryPage() {
       <main className="mx-auto max-w-7xl px-4 py-6 md:px-6">
         <h1 className="text-2xl font-bold">My Library</h1>
         <div className="mt-4 flex flex-wrap gap-2">
-          {(["watchlist", "favorites", "rated"] as LibraryTab[]).map((item) => (
+          {(["watchlist", "favorites", "rated", "lists"] as LibraryTab[]).map((item) => (
             <button
               key={item}
               className={`rounded-md border px-3 py-1.5 text-sm ${tab === item ? "border-[var(--brand)] text-white" : "border-white/20 text-white/70"}`}
@@ -78,10 +100,12 @@ export default function LibraryPage() {
               {item}
             </button>
           ))}
-          <select value={mediaType} onChange={(e) => setMediaType(e.target.value as MediaType)} className="rounded-md border border-white/20 bg-black/30 px-3 py-1.5 text-sm">
-            <option value="movie">Movies</option>
-            <option value="tv">Series</option>
-          </select>
+          {tab !== "lists" ? (
+            <select value={mediaType} onChange={(e) => setMediaType(e.target.value as MediaType)} className="rounded-md border border-white/20 bg-black/30 px-3 py-1.5 text-sm">
+              <option value="movie">Movies</option>
+              <option value="tv">Series</option>
+            </select>
+          ) : null}
           <button onClick={() => void load()} className="rounded-md bg-[var(--brand)] px-3 py-1.5 text-sm font-semibold">
             Refresh
           </button>

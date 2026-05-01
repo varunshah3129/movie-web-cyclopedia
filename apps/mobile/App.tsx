@@ -17,20 +17,26 @@ import {
 } from "react-native";
 import { StatusBar } from "expo-status-bar";
 import * as ExpoLinking from "expo-linking";
-import AsyncStorage from "@react-native-async-storage/async-storage";
+import * as SecureStore from "expo-secure-store";
 import {
   createRequestToken,
   createSession,
   discoverMediaAdvanced,
   deleteRating,
+  addItemToList,
+  createAccountList,
+  getCollectionDetails,
   getAccountDetails,
+  getAccountLists,
   getAccountFavorites,
   getAccountRated,
   getAccountWatchlist,
+  getListDetails,
   getMediaAccountStates,
   getMediaCredits,
   getMediaDetails,
   getMediaRecommendations,
+  getMediaSimilar,
   getMediaVideos,
   getMediaWatchProviders,
   getTmdbImageUrl,
@@ -51,7 +57,7 @@ import {
 import YoutubePlayer from "react-native-youtube-iframe";
 
 type MobileScreen = "home" | "browse" | "kids" | "detail" | "auth" | "library";
-type LibraryTab = "watchlist" | "favorites" | "rated";
+type LibraryTab = "watchlist" | "favorites" | "rated" | "lists";
 type BrowseMode = "all" | "movie" | "tv" | "kids";
 type MobileNavTab = "home" | "browse" | "movies" | "series" | "kids" | "library";
 type HomeHeroMovie = {
@@ -75,6 +81,22 @@ function isTransientNetworkError(error: unknown): boolean {
   return error.message.toLowerCase().includes("network request failed");
 }
 
+async function secureGet(key: string): Promise<string | null> {
+  try {
+    return await SecureStore.getItemAsync(key);
+  } catch {
+    return null;
+  }
+}
+
+async function secureSet(key: string, value: string): Promise<void> {
+  await SecureStore.setItemAsync(key, value);
+}
+
+async function secureDelete(key: string): Promise<void> {
+  await SecureStore.deleteItemAsync(key);
+}
+
 async function withRetry<T>(operation: () => Promise<T>, retries = 1, delayMs = 450): Promise<T> {
   try {
     return await operation();
@@ -87,11 +109,104 @@ async function withRetry<T>(operation: () => Promise<T>, retries = 1, delayMs = 
   }
 }
 
+const TITLE_STOP_WORDS = new Set(["the", "a", "an", "and", "of", "to", "in", "on", "for", "series", "season", "seasons", "animated", "movie", "film", "part", "chapter"]);
+
+function normalizeTitle(value: string): string {
+  return value.toLowerCase().replace(/[^a-z0-9\s]/g, " ").replace(/\s+/g, " ").trim();
+}
+
+function mediaTitle(item: TmdbMedia): string {
+  return "title" in item ? item.title : item.name;
+}
+
+function mediaTypeOf(item: TmdbMedia): MediaType {
+  return "title" in item ? "movie" : "tv";
+}
+
+function buildFranchiseQuery(value: string): string {
+  const tokens = normalizeTitle(value)
+    .split(" ")
+    .filter((token) => token.length > 1 && !TITLE_STOP_WORDS.has(token));
+  if (tokens.length === 0) return value;
+  return tokens.slice(0, 3).join(" ");
+}
+
+function tokenOverlapRatio(a: string, b: string): number {
+  const aTokens = new Set(normalizeTitle(a).split(" ").filter(Boolean));
+  const bTokens = new Set(normalizeTitle(b).split(" ").filter(Boolean));
+  if (aTokens.size === 0 || bTokens.size === 0) return 0;
+  let overlap = 0;
+  for (const token of aTokens) {
+    if (bTokens.has(token)) overlap += 1;
+  }
+  return overlap / Math.max(aTokens.size, bTokens.size);
+}
+
+function rankRelatedTitles(params: {
+  currentId: number;
+  currentMediaType: MediaType;
+  currentTitle: string;
+  recommendations: TmdbMedia[];
+  similar: TmdbMedia[];
+  collectionParts: TmdbMedia[];
+  searchResults: TmdbMedia[];
+}): TmdbMedia[] {
+  const { currentId, currentMediaType, currentTitle, recommendations, similar, collectionParts, searchResults } = params;
+  const currentNorm = normalizeTitle(currentTitle);
+  const franchiseNorm = normalizeTitle(buildFranchiseQuery(currentTitle));
+  const scored = new Map<number, { item: TmdbMedia; score: number; strict: boolean }>();
+
+  const addCandidate = (item: TmdbMedia, base: number) => {
+    if (item.id === currentId) return;
+    const candidateTitle = mediaTitle(item);
+    const candidateNorm = normalizeTitle(candidateTitle);
+    const overlap = tokenOverlapRatio(currentTitle, candidateTitle);
+    const sameUniverseBoost =
+      candidateNorm.includes(franchiseNorm) || franchiseNorm.includes(candidateNorm) ? 36 : overlap >= 0.5 ? 20 : overlap >= 0.3 ? 10 : 0;
+    const crossMediaBoost = mediaTypeOf(item) !== currentMediaType && sameUniverseBoost > 0 ? 16 : 0;
+    const popularityBoost = Math.min((item.vote_average ?? 0) * 1.2, 10);
+    const exactPrefixBoost = candidateNorm.startsWith(franchiseNorm) || candidateNorm === currentNorm ? 22 : 0;
+    const score = base + sameUniverseBoost + crossMediaBoost + popularityBoost + exactPrefixBoost;
+    const strict = sameUniverseBoost > 0 || exactPrefixBoost > 0 || base >= 110;
+
+    const prev = scored.get(item.id);
+    if (!prev || score > prev.score) {
+      scored.set(item.id, { item, score, strict });
+    }
+  };
+
+  collectionParts.forEach((item) => addCandidate(item, 120));
+  similar.forEach((item) => addCandidate(item, 75));
+  recommendations.forEach((item) => addCandidate(item, 62));
+  searchResults.forEach((item) => addCandidate(item, 58));
+
+  const ranked = Array.from(scored.values()).sort((a, b) => b.score - a.score);
+  const strictMatches = ranked.filter((entry) => entry.strict);
+  const discoveryMatches = ranked.filter((entry) => !entry.strict);
+  const picked: TmdbMedia[] = [];
+  const used = new Set<number>();
+  const take = (pool: Array<{ item: TmdbMedia }>, limit: number) => {
+    for (const candidate of pool) {
+      if (picked.length >= limit) break;
+      if (used.has(candidate.item.id)) continue;
+      picked.push(candidate.item);
+      used.add(candidate.item.id);
+    }
+  };
+
+  take(strictMatches, Math.min(5, strictMatches.length));
+  take(discoveryMatches, 10);
+  take(strictMatches, 10);
+
+  return picked.slice(0, 10);
+}
+
 export default function App() {
   const tmdbAuthLog = (...args: unknown[]) => console.log("[mobile-tmdb-auth]", ...args);
   const TMDB_SESSION_KEY = "tmdb_session_id";
   const TMDB_ACCOUNT_KEY = "tmdb_account_id";
   const TMDB_USERNAME_KEY = "tmdb_username";
+  const TMDB_CUSTOM_LIST_KEY = "tmdb_custom_list_id";
   const [items, setItems] = useState<TmdbMedia[]>([]);
   const [screen, setScreen] = useState<MobileScreen>("home");
   const [previousScreen, setPreviousScreen] = useState<MobileScreen>("home");
@@ -99,6 +214,7 @@ export default function App() {
   const [selectedOverview, setSelectedOverview] = useState<string>("");
   const [detailMeta, setDetailMeta] = useState<string>("");
   const [detailActionsMsg, setDetailActionsMsg] = useState("");
+  const [detailActionsKind, setDetailActionsKind] = useState<"success" | "error" | "info">("success");
   const [detailTrailerWatchUrl, setDetailTrailerWatchUrl] = useState("");
   const [detailTrailerVideoKey, setDetailTrailerVideoKey] = useState("");
   const [activeVideoTitle, setActiveVideoTitle] = useState("");
@@ -111,6 +227,9 @@ export default function App() {
   const [detailRated, setDetailRated] = useState<number | null>(null);
   const [actionStateMap, setActionStateMap] = useState<Record<string, { favorite: boolean; watchlist: boolean; rated: number | null }>>({});
   const [query, setQuery] = useState("");
+  const [searchSuggestions, setSearchSuggestions] = useState<TmdbMedia[]>([]);
+  const [searchSuggestionsVisible, setSearchSuggestionsVisible] = useState(false);
+  const [searchSuggestionsLoading, setSearchSuggestionsLoading] = useState(false);
   const [trendingAll, setTrendingAll] = useState<TmdbTrendingItem[]>([]);
   const [homeHeroMovies, setHomeHeroMovies] = useState<HomeHeroMovie[]>([]);
   const [homeHeroIndex, setHomeHeroIndex] = useState(0);
@@ -122,6 +241,8 @@ export default function App() {
   const [discoverCountry, setDiscoverCountry] = useState("");
   const [browseMode, setBrowseMode] = useState<BrowseMode>("movie");
   const [browseLoading, setBrowseLoading] = useState(false);
+  const [detailLoading, setDetailLoading] = useState(false);
+  const [screenTransitionLoading, setScreenTransitionLoading] = useState(false);
   const [genres, setGenres] = useState<TmdbGenre[]>([]);
   const [selectedGenre, setSelectedGenre] = useState<number | null>(null);
   const [libraryTab, setLibraryTab] = useState<LibraryTab>("watchlist");
@@ -132,12 +253,13 @@ export default function App() {
   const [tmdbSessionId, setTmdbSessionId] = useState<string | null>(null);
   const [tmdbAccountId, setTmdbAccountId] = useState<string | null>(null);
   const [tmdbUsername, setTmdbUsername] = useState<string | null>(null);
+  const [tmdbCustomListId, setTmdbCustomListId] = useState<number | null>(null);
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
   const [openCardMenuId, setOpenCardMenuId] = useState<number | null>(null);
   const [trailerModalVisible, setTrailerModalVisible] = useState(false);
   const [ratingModalVisible, setRatingModalVisible] = useState(false);
   const [selectedStars, setSelectedStars] = useState(4);
-  const [ratingTarget, setRatingTarget] = useState<null | { mediaType: "movie" | "tv"; mediaId: number }>(null);
+  const [ratingTarget, setRatingTarget] = useState<null | { mediaType: "movie" | "tv"; mediaId: number; mediaTitle: string }>(null);
   const [posterLoadingMap, setPosterLoadingMap] = useState<Record<string, boolean>>({});
   const resultOpacity = useRef(new Animated.Value(1)).current;
   const castScrollRef = useRef<ScrollView | null>(null);
@@ -158,11 +280,11 @@ export default function App() {
 
   useEffect(() => {
     async function loadStoredTmdbAuth() {
-      tmdbAuthLog("Loading stored TMDB auth from AsyncStorage");
+      tmdbAuthLog("Loading stored TMDB auth from secure storage");
       const [session, account, username] = await Promise.all([
-        AsyncStorage.getItem(TMDB_SESSION_KEY),
-        AsyncStorage.getItem(TMDB_ACCOUNT_KEY),
-        AsyncStorage.getItem(TMDB_USERNAME_KEY),
+        secureGet(TMDB_SESSION_KEY),
+        secureGet(TMDB_ACCOUNT_KEY),
+        secureGet(TMDB_USERNAME_KEY),
       ]);
       tmdbAuthLog("Loaded stored values", {
         hasSession: Boolean(session),
@@ -172,6 +294,9 @@ export default function App() {
       setTmdbSessionId(session);
       setTmdbAccountId(account);
       setTmdbUsername(username);
+      const customListRaw = await secureGet(TMDB_CUSTOM_LIST_KEY);
+      const parsedListId = customListRaw ? Number(customListRaw) : null;
+      setTmdbCustomListId(parsedListId && Number.isInteger(parsedListId) && parsedListId > 0 ? parsedListId : null);
     }
     void loadStoredTmdbAuth();
   }, []);
@@ -205,16 +330,16 @@ export default function App() {
           if (!safeUsername) {
             throw new Error("TMDB account username missing in account details.");
           }
-          tmdbAuthLog("Persisting session/account to AsyncStorage");
+          tmdbAuthLog("Persisting session/account to secure storage");
           await Promise.all([
-            AsyncStorage.setItem(TMDB_SESSION_KEY, session.session_id),
-            AsyncStorage.setItem(TMDB_ACCOUNT_KEY, String(account.id)),
-            AsyncStorage.setItem(TMDB_USERNAME_KEY, safeUsername),
+            secureSet(TMDB_SESSION_KEY, session.session_id),
+            secureSet(TMDB_ACCOUNT_KEY, String(account.id)),
+            secureSet(TMDB_USERNAME_KEY, safeUsername),
           ]);
           const [storedSession, storedAccount, storedUsername] = await Promise.all([
-            AsyncStorage.getItem(TMDB_SESSION_KEY),
-            AsyncStorage.getItem(TMDB_ACCOUNT_KEY),
-            AsyncStorage.getItem(TMDB_USERNAME_KEY),
+            secureGet(TMDB_SESSION_KEY),
+            secureGet(TMDB_ACCOUNT_KEY),
+            secureGet(TMDB_USERNAME_KEY),
           ]);
           tmdbAuthLog("Stored values after write", {
             hasSession: Boolean(storedSession),
@@ -250,6 +375,44 @@ export default function App() {
         setTrendingAll([]);
       });
   }, []);
+
+  useEffect(() => {
+    if (screen !== "browse") {
+      setSearchSuggestions([]);
+      setSearchSuggestionsVisible(false);
+      setSearchSuggestionsLoading(false);
+      return;
+    }
+    const q = query.trim();
+    if (q.length < 2) {
+      setSearchSuggestions([]);
+      setSearchSuggestionsLoading(false);
+      return;
+    }
+    let cancelled = false;
+    setSearchSuggestionsLoading(true);
+    const timer = setTimeout(() => {
+      void searchMulti(q)
+        .then((data) => {
+          if (cancelled) return;
+          const next = data.results
+            .filter((item) => item.media_type === "movie" || item.media_type === "tv")
+            .slice(0, 6);
+          setSearchSuggestions(next);
+        })
+        .catch(() => {
+          if (cancelled) return;
+          setSearchSuggestions([]);
+        })
+        .finally(() => {
+          if (!cancelled) setSearchSuggestionsLoading(false);
+        });
+    }, 280);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [screen, query]);
 
   useEffect(() => {
     const currentYear = new Date().getFullYear();
@@ -297,16 +460,22 @@ export default function App() {
 
   useEffect(() => {
     if (!selected) return;
+    setDetailLoading(true);
     const mediaType = "title" in selected ? "movie" : "tv";
+    const currentTitle = "title" in selected ? selected.title : selected.name;
+    const franchiseQuery = buildFranchiseQuery(currentTitle);
     Promise.all([
       getMediaDetails(mediaType, selected.id),
       getMediaCredits(mediaType, selected.id),
       getMediaVideos(mediaType, selected.id),
       getMediaRecommendations(mediaType, selected.id),
+      getMediaSimilar(mediaType, selected.id),
       getMediaAccountStates(mediaType, selected.id, tmdbSessionId ?? undefined),
       getMediaWatchProviders(mediaType, selected.id),
+      searchMulti(currentTitle),
+      franchiseQuery !== currentTitle ? searchMulti(franchiseQuery) : Promise.resolve({ results: [] }),
     ])
-      .then(([details, credits, videos, recs, accountState, providers]) => {
+      .then(async ([details, credits, videos, recs, similar, accountState, providers, searchByTitle, searchByFranchise]) => {
         setSelectedOverview(details.overview || "No overview available.");
         const youtubeVideos = videos.results.filter((v) => v.site === "YouTube");
         const trailer = youtubeVideos.find((v) => v.type === "Trailer" || v.type === "Teaser") ?? youtubeVideos[0];
@@ -326,7 +495,22 @@ export default function App() {
         );
         const castAndCrew = [...credits.cast, ...credits.crew].filter((person, index, arr) => arr.findIndex((entry) => entry.id === person.id) === index);
         setDetailCast(castAndCrew.slice(0, 16));
-        setDetailRecommendations(recs.results.slice(0, 8));
+        const collectionDetails =
+          mediaType === "movie" && details.belongs_to_collection?.id
+            ? await getCollectionDetails(details.belongs_to_collection.id).catch(() => null)
+            : null;
+        const mergedRelated = rankRelatedTitles({
+          currentId: selected.id,
+          currentMediaType: mediaType,
+          currentTitle,
+          recommendations: recs.results,
+          similar: similar.results,
+          collectionParts: collectionDetails?.parts ?? [],
+          searchResults: [...(searchByTitle.results ?? []), ...(searchByFranchise.results ?? [])]
+            .filter((item): item is TmdbMedia => item.media_type === "movie" || item.media_type === "tv")
+            .slice(0, 24),
+        });
+        setDetailRecommendations(mergedRelated.slice(0, 10));
         setDetailFavorite(accountState?.favorite ?? false);
         setDetailWatchlist(accountState?.watchlist ?? false);
         setDetailRated(parseTmdbRatedTenPoint(accountState?.rated ?? false));
@@ -352,6 +536,9 @@ export default function App() {
         setDetailFavorite(false);
         setDetailWatchlist(false);
         setDetailRated(null);
+      })
+      .finally(() => {
+        setDetailLoading(false);
       });
   }, [selected, tmdbSessionId]);
 
@@ -403,6 +590,35 @@ export default function App() {
       return;
     }
     setLibraryError("");
+    if (tab === "lists") {
+      void (async () => {
+        try {
+          let listId = tmdbCustomListId;
+          if (!listId) {
+            const lists = await getAccountLists(1, tmdbSessionId, tmdbAccountId);
+            const matched = lists.results.find((item) => item.name.toLowerCase() === "moviepedia picks");
+            listId = matched?.id ?? null;
+            if (listId) {
+              setTmdbCustomListId(listId);
+              await secureSet(TMDB_CUSTOM_LIST_KEY, String(listId));
+            }
+          }
+          if (!listId) {
+            setLibraryItems([]);
+            setLibraryError("No TMDB custom list yet. Use Add to list first.");
+            return;
+          }
+          const list = await getListDetails(listId, tmdbSessionId);
+          setLibraryItems(list.items ?? []);
+          setLibraryError("");
+        } catch {
+          setLibraryItems([]);
+          setLibraryError("Unable to load TMDB custom list.");
+        }
+      })();
+      return;
+    }
+
     const loaders =
       tab === "watchlist"
         ? [getAccountWatchlist("movie", 1, tmdbSessionId, tmdbAccountId), getAccountWatchlist("tv", 1, tmdbSessionId, tmdbAccountId)]
@@ -454,17 +670,52 @@ export default function App() {
     recScrollRef.current?.scrollTo({ x: 0, animated: false });
   }, [selected?.id]);
 
-  function triggerAction(type: "favorite" | "watchlist" | "rate" | "unrate", mediaType: "movie" | "tv", mediaId: number, value: boolean | number) {
-    const action =
-      type === "favorite"
-        ? setFavorite(mediaType, mediaId, Boolean(value), tmdbSessionId ?? undefined, tmdbAccountId ?? undefined)
-        : type === "watchlist"
-          ? setWatchlist(mediaType, mediaId, Boolean(value), tmdbSessionId ?? undefined, tmdbAccountId ?? undefined)
-          : type === "rate"
-            ? rateMedia(mediaType, mediaId, Number(value), tmdbSessionId ?? undefined)
-            : deleteRating(mediaType, mediaId, tmdbSessionId ?? undefined);
-    action
-      .then(() => {
+  async function ensureMoviepediaListId(): Promise<number> {
+    if (!tmdbSessionId || !tmdbAccountId) {
+      throw new Error("TMDB session/account required");
+    }
+    if (tmdbCustomListId && Number.isInteger(tmdbCustomListId) && tmdbCustomListId > 0) {
+      return tmdbCustomListId;
+    }
+    const targetName = "Moviepedia Picks";
+    const existing = await getAccountLists(1, tmdbSessionId, tmdbAccountId);
+    const matched = existing.results.find((item) => item.name.toLowerCase() === targetName.toLowerCase());
+    if (matched) {
+      setTmdbCustomListId(matched.id);
+      await secureSet(TMDB_CUSTOM_LIST_KEY, String(matched.id));
+      return matched.id;
+    }
+    const created = await createAccountList(targetName, "Created by Moviepedia", tmdbSessionId);
+    if (!created.success || !created.list_id) {
+      throw new Error(created.status_message || "Unable to create TMDB list");
+    }
+    setTmdbCustomListId(created.list_id);
+    await secureSet(TMDB_CUSTOM_LIST_KEY, String(created.list_id));
+    return created.list_id;
+  }
+
+  function triggerAction(
+    type: "favorite" | "watchlist" | "rate" | "unrate" | "list",
+    mediaType: "movie" | "tv",
+    mediaId: number,
+    value: boolean | number,
+    mediaTitle?: string,
+  ) {
+    void (async () => {
+      try {
+        if (type === "favorite") {
+          await setFavorite(mediaType, mediaId, Boolean(value), tmdbSessionId ?? undefined, tmdbAccountId ?? undefined);
+        } else if (type === "watchlist") {
+          await setWatchlist(mediaType, mediaId, Boolean(value), tmdbSessionId ?? undefined, tmdbAccountId ?? undefined);
+        } else if (type === "rate") {
+          await rateMedia(mediaType, mediaId, Number(value), tmdbSessionId ?? undefined);
+        } else if (type === "unrate") {
+          await deleteRating(mediaType, mediaId, tmdbSessionId ?? undefined);
+        } else {
+          const listId = await ensureMoviepediaListId();
+          await addItemToList(listId, mediaId, tmdbSessionId ?? undefined);
+        }
+
         const key = `${mediaType}-${mediaId}`;
         setActionStateMap((prev) => {
           const current = prev[key] ?? { favorite: false, watchlist: false, rated: null };
@@ -484,9 +735,30 @@ export default function App() {
           if (type === "rate") setDetailRated(Number(value));
           if (type === "unrate") setDetailRated(null);
         }
-        setDetailActionsMsg("Updated");
-      })
-      .catch(() => setDetailActionsMsg("Connect TMDB session/account to use this action."));
+        const targetTitle =
+          mediaTitle ??
+          (selected && selected.id === mediaId ? ("title" in selected ? selected.title : selected.name) : "Title");
+        const message =
+          type === "list"
+            ? `${targetTitle} added to Moviepedia Picks list`
+            : type === "favorite"
+              ? Boolean(value)
+                ? `${targetTitle} added to favorites`
+                : `${targetTitle} removed from favorites`
+              : type === "watchlist"
+                ? Boolean(value)
+                  ? `${targetTitle} added to watchlist`
+                  : `${targetTitle} removed from watchlist`
+                : type === "rate"
+                  ? `${targetTitle} rated ${(Number(value) / 2).toFixed(1)}/5`
+                  : `Rating removed for ${targetTitle}`;
+        setDetailActionsKind("success");
+        setDetailActionsMsg(message);
+      } catch {
+        setDetailActionsKind("error");
+        setDetailActionsMsg("Connect TMDB session/account to use this action.");
+      }
+    })();
   }
 
   async function runBrowseSearch(searchText: string, mode: BrowseMode) {
@@ -590,16 +862,7 @@ export default function App() {
 
   async function handleAuthPress(type: "google" | "tmdb") {
     if (type === "google") {
-      const googleUrl = process.env.EXPO_PUBLIC_WEB_GOOGLE_SIGNIN_URL;
-      const fallbackWebSignIn = "http://127.0.0.1:3000/auth/sign-in";
-      const target = googleUrl ?? fallbackWebSignIn;
-      const opened = await Linking.canOpenURL(target);
-      if (!opened) {
-        setAuthStatus("Unable to open Google sign-in URL. Set EXPO_PUBLIC_WEB_GOOGLE_SIGNIN_URL.");
-        return;
-      }
-      setAuthStatus("");
-      await Linking.openURL(target);
+      setAuthStatus("Google SSO is coming soon in Phase 2.");
       return;
     }
 
@@ -651,9 +914,17 @@ export default function App() {
     if (screen !== "detail") {
       setPreviousScreen(screen);
     }
+    setScreenTransitionLoading(true);
     setSelected(item);
     setScreen("detail");
     setOpenCardMenuId(null);
+    setTimeout(() => setScreenTransitionLoading(false), 220);
+  }
+
+  function transitionToScreen(next: MobileScreen) {
+    setScreenTransitionLoading(true);
+    setScreen(next);
+    setTimeout(() => setScreenTransitionLoading(false), 220);
   }
 
   function setPosterLoading(key: string, loading: boolean) {
@@ -662,16 +933,18 @@ export default function App() {
 
   async function logoutTmdb() {
     await Promise.all([
-      AsyncStorage.removeItem(TMDB_SESSION_KEY),
-      AsyncStorage.removeItem(TMDB_ACCOUNT_KEY),
-      AsyncStorage.removeItem(TMDB_USERNAME_KEY),
+      secureDelete(TMDB_SESSION_KEY),
+      secureDelete(TMDB_ACCOUNT_KEY),
+      secureDelete(TMDB_USERNAME_KEY),
+      secureDelete(TMDB_CUSTOM_LIST_KEY),
     ]);
     setTmdbSessionId(null);
     setTmdbAccountId(null);
     setTmdbUsername(null);
+    setTmdbCustomListId(null);
     setProfileMenuOpen(false);
     setAuthStatus("Logged out from TMDB.");
-    setScreen("home");
+    transitionToScreen("home");
   }
 
   function isNavTabActive(tab: MobileNavTab): boolean {
@@ -685,15 +958,15 @@ export default function App() {
 
   function handleNavTabPress(tab: MobileNavTab) {
     if (tab === "home") {
-      setScreen("home");
+      transitionToScreen("home");
       return;
     }
     if (tab === "library") {
-      setScreen("library");
+      transitionToScreen("library");
       return;
     }
     const mode: BrowseMode = tab === "browse" ? "all" : tab === "movies" ? "movie" : tab === "series" ? "tv" : "kids";
-    setScreen("browse");
+    transitionToScreen("browse");
     setBrowseMode(mode);
     setSelectedGenre(null);
     void runBrowseDiscover(mode).catch(() => setItems([]));
@@ -713,7 +986,7 @@ export default function App() {
                   setProfileMenuOpen((prev) => !prev);
                   return;
                 }
-                setScreen("auth");
+                transitionToScreen("auth");
               }}
             >
               <Text style={styles.loginButtonText}>
@@ -727,7 +1000,7 @@ export default function App() {
                   style={styles.profileMenuItem}
                   onPress={() => {
                     setProfileMenuOpen(false);
-                    setScreen("library");
+                    transitionToScreen("library");
                   }}
                 >
                   <Text style={styles.profileMenuText}>Library</Text>
@@ -736,7 +1009,7 @@ export default function App() {
                   style={styles.profileMenuItem}
                   onPress={() => {
                     setProfileMenuOpen(false);
-                    setScreen("auth");
+                    transitionToScreen("auth");
                   }}
                 >
                   <Text style={styles.profileMenuText}>TMDB settings</Text>
@@ -891,7 +1164,46 @@ export default function App() {
               style={styles.searchInput}
               placeholder="Type movie or series name"
               placeholderTextColor="#8f95a8"
+              onFocus={() => setSearchSuggestionsVisible(true)}
             />
+            {searchSuggestionsVisible ? (
+              <View style={styles.autocompletePanel}>
+                {searchSuggestionsLoading ? <Text style={styles.autocompleteHint}>Searching...</Text> : null}
+                {!searchSuggestionsLoading && searchSuggestions.length === 0 && query.trim().length >= 2 ? <Text style={styles.autocompleteHint}>No matches found</Text> : null}
+                {!searchSuggestionsLoading
+                  ? searchSuggestions.map((item) => {
+                      const title = "title" in item ? item.title : item.name;
+                      const year = ("release_date" in item ? item.release_date : item.first_air_date)?.slice(0, 4) || "N/A";
+                      const posterPath = "poster_path" in item ? item.poster_path : null;
+                      return (
+                        <Pressable
+                          key={`suggest-${item.id}-${item.media_type ?? "movie"}`}
+                          style={styles.autocompleteItem}
+                          onPress={() => {
+                            setSearchSuggestionsVisible(false);
+                            setQuery(title);
+                            openDetail(item);
+                          }}
+                        >
+                          <View style={styles.autocompleteRow}>
+                            {posterPath ? (
+                              <Image source={{ uri: getTmdbImageUrl(posterPath, "w342") }} style={styles.autocompleteThumb} />
+                            ) : (
+                              <View style={styles.autocompleteThumbFallback} />
+                            )}
+                            <View style={styles.autocompleteTextWrap}>
+                              <Text numberOfLines={1} style={styles.autocompleteTitle}>
+                                {title}
+                              </Text>
+                              <Text style={styles.autocompleteMeta}>{(item.media_type === "tv" ? "Series" : "Movie") + " • " + year}</Text>
+                            </View>
+                          </View>
+                        </Pressable>
+                      );
+                    })
+                  : null}
+              </View>
+            ) : null}
             <View style={styles.queryRow}>
               {["avatar", "batman", "silo"].map((preset) => (
                 <Pressable
@@ -987,14 +1299,15 @@ export default function App() {
         {screen === "auth" ? (
           <View style={styles.panel}>
             <Text style={styles.sectionTitle}>Sign In</Text>
-            <Text style={styles.heroCopy}>Google SSO is enabled for Moviepedia. Connect TMDB to sync favorites, watchlist, and ratings.</Text>
+            <Text style={styles.heroCopy}>Phase 1 uses TMDB connect for account actions. Google SSO ships in Phase 2.</Text>
             <Pressable style={styles.authButton} onPress={() => void handleAuthPress("google")}>
               <Text style={styles.authButtonText}>Continue with Google</Text>
             </Pressable>
+            <Text style={styles.heroCopy}>Use Google for app identity and cross-device profile in the next phase.</Text>
             <Pressable style={styles.authButton} onPress={() => void handleAuthPress("tmdb")}>
               <Text style={styles.authButtonText}>Connect TMDB account</Text>
             </Pressable>
-            <Text style={styles.heroCopy}>Mobile parity with web auth flow: Google sign-in + TMDB account connection.</Text>
+            <Text style={styles.heroCopy}>Connect TMDB to sync watchlist, favorites, and ratings with your TMDB profile.</Text>
             {tmdbUsername ? <Text style={styles.heroCopy}>Connected as @{tmdbUsername}</Text> : null}
             {authStatus ? <Text style={styles.heroCopy}>{authStatus}</Text> : null}
           </View>
@@ -1002,9 +1315,15 @@ export default function App() {
 
         {screen === "detail" && selected ? (
           <View style={styles.panel}>
-            <Pressable style={styles.detailBackBtn} onPress={() => setScreen(previousScreen)}>
+            <Pressable style={styles.detailBackBtn} onPress={() => transitionToScreen(previousScreen)}>
               <Text style={styles.detailBackBtnText}>← Back</Text>
             </Pressable>
+            {detailLoading ? (
+              <View style={styles.detailLoadingOverlay}>
+                <ActivityIndicator size="small" color="#fff" />
+                <Text style={styles.detailLoadingText}>Loading details...</Text>
+              </View>
+            ) : null}
             <View style={styles.detailHeroVisual}>
               {selected.backdrop_path || selected.poster_path ? (
                 <Image
@@ -1048,18 +1367,27 @@ export default function App() {
                       <Text style={styles.actionCircleIcon}>▶</Text>
                     </Pressable>
                   ) : null}
-                  <Pressable style={[styles.actionCircle, styles.actionCircleNeutral]} onPress={() => setDetailActionsMsg("List feature next")}>
+                  <Pressable
+                    style={[styles.actionCircle, styles.actionCircleNeutral]}
+                    onPress={() =>
+                      triggerAction("list", "title" in selected ? "movie" : "tv", selected.id, true, "title" in selected ? selected.title : selected.name)
+                    }
+                  >
                     <Text style={styles.actionCircleIcon}>☰</Text>
                   </Pressable>
                   <Pressable
                     style={[styles.actionCircle, detailFavorite ? styles.actionCirclePinkActive : styles.actionCircleInactive]}
-                    onPress={() => triggerAction("favorite", "title" in selected ? "movie" : "tv", selected.id, !detailFavorite)}
+                    onPress={() =>
+                      triggerAction("favorite", "title" in selected ? "movie" : "tv", selected.id, !detailFavorite, "title" in selected ? selected.title : selected.name)
+                    }
                   >
                     <Text style={styles.actionCircleIcon}>♥</Text>
                   </Pressable>
                   <Pressable
                     style={[styles.actionCircle, detailWatchlist ? styles.actionCircleBlueActive : styles.actionCircleInactive]}
-                    onPress={() => triggerAction("watchlist", "title" in selected ? "movie" : "tv", selected.id, !detailWatchlist)}
+                    onPress={() =>
+                      triggerAction("watchlist", "title" in selected ? "movie" : "tv", selected.id, !detailWatchlist, "title" in selected ? selected.title : selected.name)
+                    }
                   >
                     <Text style={styles.actionCircleIcon}>🔖</Text>
                   </Pressable>
@@ -1067,10 +1395,10 @@ export default function App() {
                     style={[styles.actionCircle, detailRated !== null ? styles.actionCircleAmberActive : styles.actionCircleInactive]}
                     onPress={() => {
                       if (detailRated !== null) {
-                        triggerAction("unrate", "title" in selected ? "movie" : "tv", selected.id, 0);
+                        triggerAction("unrate", "title" in selected ? "movie" : "tv", selected.id, 0, "title" in selected ? selected.title : selected.name);
                         return;
                       }
-                      setRatingTarget({ mediaType: "title" in selected ? "movie" : "tv", mediaId: selected.id });
+                      setRatingTarget({ mediaType: "title" in selected ? "movie" : "tv", mediaId: selected.id, mediaTitle: "title" in selected ? selected.title : selected.name });
                       setSelectedStars(4);
                       setRatingModalVisible(true);
                     }}
@@ -1306,7 +1634,7 @@ export default function App() {
           <View style={styles.panel}>
             <Text style={styles.sectionTitle}>My Library</Text>
             <View style={styles.queryRow}>
-              {(["watchlist", "favorites", "rated"] as LibraryTab[]).map((tab) => (
+              {(["watchlist", "favorites", "rated", "lists"] as LibraryTab[]).map((tab) => (
                 <Pressable key={tab} style={styles.queryChip} onPress={() => setLibraryTab(tab)}>
                   <Text style={styles.queryChipText}>{tab}</Text>
                 </Pressable>
@@ -1350,7 +1678,7 @@ export default function App() {
           </View>
         ) : null}
 
-        {screen !== "auth" ? (
+        {screen !== "auth" && !(screen === "browse" && browseLoading) ? (
           <Animated.View style={[styles.grid, { opacity: resultOpacity }]}>
             {visibleItems.map((item) => {
               const title = "title" in item ? item.title : item.name;
@@ -1418,7 +1746,21 @@ export default function App() {
                             style={styles.cardMenuItem}
                             onPress={() => {
                               setOpenCardMenuId(null);
-                              triggerAction("favorite", mediaType, item.id, !itemState.favorite);
+                              triggerAction("list", mediaType, item.id, true, title);
+                            }}
+                          >
+                            <View style={styles.cardMenuItemRow}>
+                              <View style={[styles.cardMenuIconCircle, styles.cardMenuIconInactive]}>
+                                <Text style={styles.cardMenuIconText}>☰</Text>
+                              </View>
+                              <Text style={styles.cardMenuText}>Add to list</Text>
+                            </View>
+                          </Pressable>
+                          <Pressable
+                            style={styles.cardMenuItem}
+                            onPress={() => {
+                              setOpenCardMenuId(null);
+                              triggerAction("favorite", mediaType, item.id, !itemState.favorite, title);
                             }}
                           >
                             <View style={styles.cardMenuItemRow}>
@@ -1432,7 +1774,7 @@ export default function App() {
                             style={styles.cardMenuItem}
                             onPress={() => {
                               setOpenCardMenuId(null);
-                              triggerAction("watchlist", mediaType, item.id, !itemState.watchlist);
+                              triggerAction("watchlist", mediaType, item.id, !itemState.watchlist, title);
                             }}
                           >
                             <View style={styles.cardMenuItemRow}>
@@ -1447,10 +1789,10 @@ export default function App() {
                             onPress={() => {
                               setOpenCardMenuId(null);
                               if (itemState.rated !== null) {
-                                triggerAction("unrate", mediaType, item.id, 0);
+                                triggerAction("unrate", mediaType, item.id, 0, title);
                                 return;
                               }
-                              setRatingTarget({ mediaType, mediaId: item.id });
+                              setRatingTarget({ mediaType, mediaId: item.id, mediaTitle: title });
                               setSelectedStars(4);
                               setRatingModalVisible(true);
                             }}
@@ -1471,6 +1813,17 @@ export default function App() {
             })}
           </Animated.View>
         ) : null}
+        {screen === "browse" && browseLoading ? (
+          <View style={styles.mobileBrowseSkeletonGrid}>
+            {Array.from({ length: 8 }, (_, idx) => (
+              <View key={`browse-skeleton-${idx}`} style={styles.card}>
+                <View style={styles.mobileBrowseSkeletonPoster} />
+                <View style={styles.mobileBrowseSkeletonLineLg} />
+                <View style={styles.mobileBrowseSkeletonLineSm} />
+              </View>
+            ))}
+          </View>
+        ) : null}
       </ScrollView>
       <Modal visible={ratingModalVisible} transparent animationType="fade" onRequestClose={() => setRatingModalVisible(false)}>
         <View style={styles.modalBackdrop}>
@@ -1478,11 +1831,14 @@ export default function App() {
             <Text style={styles.modalTitle}>Your rating</Text>
             <Text style={styles.ratingModalHint}>Tap the stars to choose your score out of five.</Text>
             <View style={styles.starRow}>
-              {Array.from({ length: 5 }, (_, idx) => idx + 1).map((value) => (
-                <Pressable key={value} onPress={() => setSelectedStars(value)}>
-                  <Text style={[styles.starText, value <= selectedStars ? styles.starTextActive : null]}>★</Text>
-                </Pressable>
-              ))}
+              {Array.from({ length: 5 }, (_, idx) => idx + 1).map((value) => {
+                const isActive = value <= selectedStars;
+                return (
+                  <Pressable key={value} style={[styles.starButton, isActive ? styles.starButtonActive : null]} onPress={() => setSelectedStars(value)}>
+                    <Text style={[styles.starText, isActive ? styles.starTextActive : null]}>★</Text>
+                  </Pressable>
+                );
+              })}
             </View>
             <Text style={styles.ratingModalSummary}>{selectedStars} of 5 stars</Text>
             <View style={styles.modalRow}>
@@ -1493,7 +1849,7 @@ export default function App() {
                 style={styles.modalPrimary}
                 onPress={() => {
                   if (ratingTarget) {
-                    triggerAction("rate", ratingTarget.mediaType, ratingTarget.mediaId, selectedStars * 2);
+                    triggerAction("rate", ratingTarget.mediaType, ratingTarget.mediaId, selectedStars * 2, ratingTarget.mediaTitle);
                   }
                   setRatingModalVisible(false);
                   setRatingTarget(null);
@@ -1507,7 +1863,8 @@ export default function App() {
       </Modal>
       {detailActionsMsg ? (
         <View pointerEvents="none" style={styles.actionToastWrap}>
-          <View style={styles.actionToast}>
+          <View style={[styles.actionToast, detailActionsKind === "error" ? styles.actionToastError : detailActionsKind === "info" ? styles.actionToastInfo : styles.actionToastSuccess]}>
+            <Text style={styles.actionToastIcon}>{detailActionsKind === "error" ? "✕" : detailActionsKind === "info" ? "i" : "✓"}</Text>
             <Text style={styles.actionToastText}>{detailActionsMsg}</Text>
           </View>
         </View>
@@ -1552,6 +1909,14 @@ export default function App() {
           </View>
         </View>
       </Modal>
+      {screenTransitionLoading ? (
+        <View pointerEvents="none" style={styles.screenTransitionOverlay}>
+          <View style={styles.screenTransitionCard}>
+            <ActivityIndicator size="small" color="#fff" />
+            <Text style={styles.screenTransitionText}>Loading screen...</Text>
+          </View>
+        </View>
+      ) : null}
     </SafeAreaView>
   );
 }
@@ -1864,6 +2229,57 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     color: "#fff",
     marginBottom: 10,
+  },
+  autocompletePanel: {
+    marginTop: -4,
+    marginBottom: 10,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.12)",
+    backgroundColor: "#0a0d13",
+    overflow: "hidden",
+  },
+  autocompleteItem: {
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: "rgba(255,255,255,0.06)",
+  },
+  autocompleteRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
+  autocompleteThumb: {
+    width: 28,
+    height: 42,
+    borderRadius: 4,
+    backgroundColor: "rgba(255,255,255,0.08)",
+  },
+  autocompleteThumbFallback: {
+    width: 28,
+    height: 42,
+    borderRadius: 4,
+    backgroundColor: "rgba(255,255,255,0.08)",
+  },
+  autocompleteTextWrap: {
+    flex: 1,
+  },
+  autocompleteTitle: {
+    color: "#fff",
+    fontSize: 13,
+    fontWeight: "600",
+  },
+  autocompleteMeta: {
+    marginTop: 2,
+    color: "#99a0b2",
+    fontSize: 11,
+  },
+  autocompleteHint: {
+    color: "#b4bac8",
+    fontSize: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
   },
   filterInputGrid: {
     flexDirection: "row",
@@ -2369,6 +2785,78 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(0,0,0,0.85)",
     justifyContent: "center",
   },
+  detailLoadingOverlay: {
+    position: "absolute",
+    top: 44,
+    right: 10,
+    zIndex: 6,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.22)",
+    backgroundColor: "rgba(5,7,12,0.92)",
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  detailLoadingText: {
+    color: "#fff",
+    fontSize: 11,
+    fontWeight: "600",
+  },
+  mobileBrowseSkeletonGrid: {
+    marginTop: 8,
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 10,
+  },
+  mobileBrowseSkeletonPoster: {
+    width: "100%",
+    aspectRatio: 2 / 3,
+    borderRadius: 12,
+    backgroundColor: "rgba(255,255,255,0.12)",
+  },
+  mobileBrowseSkeletonLineLg: {
+    marginTop: 8,
+    height: 10,
+    width: "84%",
+    borderRadius: 6,
+    backgroundColor: "rgba(255,255,255,0.12)",
+  },
+  mobileBrowseSkeletonLineSm: {
+    marginTop: 5,
+    height: 8,
+    width: "48%",
+    borderRadius: 6,
+    backgroundColor: "rgba(255,255,255,0.1)",
+  },
+  screenTransitionOverlay: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    top: 0,
+    bottom: 0,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(2,3,5,0.2)",
+  },
+  screenTransitionCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: "rgba(239,68,68,0.38)",
+    backgroundColor: "rgba(5,7,12,0.92)",
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+  },
+  screenTransitionText: {
+    color: "#fff",
+    fontSize: 12,
+    fontWeight: "600",
+  },
   actionToastWrap: {
     position: "absolute",
     left: 0,
@@ -2383,11 +2871,32 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(5,7,12,0.9)",
     borderColor: "rgba(255,255,255,0.2)",
     borderWidth: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  actionToastSuccess: {
+    borderColor: "rgba(255,255,255,0.22)",
+    backgroundColor: "#121826",
+  },
+  actionToastError: {
+    borderColor: "rgba(239,68,68,0.5)",
+    backgroundColor: "#1c0f14",
+  },
+  actionToastInfo: {
+    borderColor: "rgba(148,163,184,0.5)",
+    backgroundColor: "#111a2a",
+  },
+  actionToastIcon: {
+    color: "#fbbf24",
+    fontSize: 12,
+    fontWeight: "700",
   },
   actionToastText: {
     color: "#fff",
     fontSize: 12,
     fontWeight: "600",
+    flexShrink: 1,
   },
   modalCard: {
     borderRadius: 12,
@@ -2395,6 +2904,9 @@ const styles = StyleSheet.create({
     padding: 16,
     borderColor: "rgba(255,255,255,0.12)",
     borderWidth: 1,
+    width: "100%",
+    maxWidth: 380,
+    alignSelf: "center",
   },
   modalTitle: {
     color: "#fff",
@@ -2446,9 +2958,24 @@ const styles = StyleSheet.create({
     marginTop: 10,
     flexDirection: "row",
     gap: 8,
+    justifyContent: "space-between",
+  },
+  starButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.2)",
+    backgroundColor: "rgba(255,255,255,0.04)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  starButtonActive: {
+    borderColor: "rgba(251,191,36,0.95)",
+    backgroundColor: "rgba(245,179,1,0.18)",
   },
   starText: {
-    fontSize: 28,
+    fontSize: 26,
     color: "rgba(255,255,255,0.35)",
   },
   starTextActive: {

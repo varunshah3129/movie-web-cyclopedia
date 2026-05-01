@@ -1,11 +1,15 @@
 import type {
+  TmdbAccountList,
   MediaType,
   TmdbAccountDetails,
   TmdbAccountStates,
+  TmdbCollectionDetails,
+  TmdbCreateListResponse,
   TmdbCreditsResponse,
   TmdbDiscoverFilters,
   TmdbGenre,
   TmdbListResponse,
+  TmdbListDetails,
   TmdbMedia,
   TmdbMediaDetails,
   TmdbRequestTokenResponse,
@@ -146,6 +150,17 @@ export async function getMediaRecommendations(mediaType: MediaType, id: number):
   return tmdbFetch<TmdbListResponse<TmdbMedia>>(`/${mediaType}/${id}/recommendations`);
 }
 
+export async function getMediaSimilar(mediaType: MediaType, id: number): Promise<TmdbListResponse<TmdbMedia>> {
+  return tmdbFetch<TmdbListResponse<TmdbMedia>>(`/${mediaType}/${id}/similar`);
+}
+
+export async function getCollectionDetails(collectionId: number): Promise<TmdbCollectionDetails> {
+  if (!Number.isInteger(collectionId) || collectionId < 1) {
+    throw new Error("Valid collectionId is required.");
+  }
+  return tmdbFetch<TmdbCollectionDetails>(`/collection/${collectionId}`);
+}
+
 export async function getMediaWatchProviders(mediaType: MediaType, id: number): Promise<TmdbWatchProvidersResponse> {
   return tmdbFetch<TmdbWatchProvidersResponse>(`/${mediaType}/${id}/watch/providers`);
 }
@@ -227,6 +242,61 @@ export async function setFavorite(
       media_id: mediaId,
       favorite,
     },
+  });
+}
+
+export async function getAccountLists(page = 1, sessionId = getSessionId(), accountId = getAccountId()): Promise<TmdbListResponse<TmdbAccountList>> {
+  if (!sessionId || !accountId) {
+    throw new Error("TMDB_SESSION_ID and TMDB_ACCOUNT_ID are required for account lists.");
+  }
+  return tmdbFetch<TmdbListResponse<TmdbAccountList>>(`/account/${accountId}/lists`, {
+    session_id: sessionId,
+    page: String(page),
+  });
+}
+
+export async function createAccountList(
+  name: string,
+  description = "Created by Moviepedia",
+  sessionId = getSessionId(),
+): Promise<TmdbCreateListResponse> {
+  if (!sessionId) {
+    throw new Error("TMDB_SESSION_ID is required for creating lists.");
+  }
+  return tmdbRequest<TmdbCreateListResponse>("/list", {
+    method: "POST",
+    params: { session_id: sessionId },
+    body: {
+      name,
+      description,
+      language: "en",
+    },
+  });
+}
+
+export async function addItemToList(listId: number, mediaId: number, sessionId = getSessionId()): Promise<TmdbStatusResponse> {
+  if (!sessionId) {
+    throw new Error("TMDB_SESSION_ID is required for list update.");
+  }
+  if (!Number.isInteger(listId) || listId < 1) {
+    throw new Error("Valid listId is required.");
+  }
+  return tmdbRequest<TmdbStatusResponse>(`/list/${listId}/add_item`, {
+    method: "POST",
+    params: { session_id: sessionId },
+    body: { media_id: mediaId },
+  });
+}
+
+export async function getListDetails(listId: number, sessionId = getSessionId()): Promise<TmdbListDetails> {
+  if (!sessionId) {
+    throw new Error("TMDB_SESSION_ID is required for list details.");
+  }
+  if (!Number.isInteger(listId) || listId < 1) {
+    throw new Error("Valid listId is required.");
+  }
+  return tmdbFetch<TmdbListDetails>(`/list/${listId}`, {
+    session_id: sessionId,
   });
 }
 

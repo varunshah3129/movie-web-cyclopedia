@@ -36,7 +36,7 @@ export function BrowseClient({ initialType, initialQuery }: BrowseClientProps) {
 
   const hasQuery = useMemo(() => query.trim().length > 1, [query]);
 
-  async function ensureLoadingVisible(startedAt: number, minMs = 450): Promise<void> {
+  async function ensureLoadingVisible(startedAt: number, minMs = 180): Promise<void> {
     const elapsed = Date.now() - startedAt;
     if (elapsed >= minMs) return;
     await new Promise((resolve) => setTimeout(resolve, minMs - elapsed));
@@ -222,22 +222,22 @@ export function BrowseClient({ initialType, initialQuery }: BrowseClientProps) {
     <div className="min-h-screen bg-background text-foreground">
       <AppHeader />
 
-      <main className="mx-auto max-w-7xl px-4 py-6 md:px-6">
-        <div className="mb-5 flex items-center justify-between">
-          <h1 className="text-2xl font-bold">{mediaType === "movie" ? "Browse Movies" : mediaType === "tv" ? "Browse Series" : mediaType === "kids" ? "Browse Kids" : "Browse All"}</h1>
-          <p className="text-sm text-white/60">{hasQuery ? `Search results for "${query}"` : "Discover mode"}</p>
+      <main className="mx-auto max-w-7xl px-3 py-5 sm:px-4 md:px-6">
+        <div className="mb-5 flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+          <h1 className="text-xl font-bold sm:text-2xl">{mediaType === "movie" ? "Browse Movies" : mediaType === "tv" ? "Browse Series" : mediaType === "kids" ? "Browse Kids" : "Browse All"}</h1>
+          <p className="text-xs text-white/60 sm:text-sm">{hasQuery ? `Search results for "${query}"` : "Discover mode"}</p>
         </div>
-        <div className="grid gap-3 md:grid-cols-[1fr_auto_auto]">
+        <div className="grid gap-2 sm:gap-3 md:grid-cols-[1fr_auto_auto]">
           <input
             value={query}
             onChange={(event) => setQuery(event.target.value)}
             placeholder="Search movies or series"
-            className="w-full rounded-md border border-white/20 bg-black/30 px-4 py-3 text-sm outline-none placeholder:text-white/45 focus:border-white/50"
+            className="w-full rounded-md border border-white/20 bg-black/30 px-3 py-2.5 text-sm outline-none placeholder:text-white/45 focus:border-white/50 sm:px-4 sm:py-3"
           />
           <select
             value={mediaType}
             onChange={(event) => setMediaType(event.target.value as MediaType | "all" | "kids")}
-            className="rounded-md border border-white/20 bg-black/30 px-4 py-3 text-sm"
+            className="rounded-md border border-white/20 bg-black/30 px-3 py-2.5 text-sm sm:px-4 sm:py-3"
           >
             <option value="all">All</option>
             <option value="movie">Movies</option>
@@ -247,7 +247,7 @@ export function BrowseClient({ initialType, initialQuery }: BrowseClientProps) {
           <button
             onClick={() => void runSearch(query, mediaType)}
             disabled={loading}
-            className="rounded-md bg-[var(--brand)] px-5 py-3 text-sm font-semibold transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-70"
+            className="rounded-md bg-[var(--brand)] px-4 py-2.5 text-sm font-semibold transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-70 sm:px-5 sm:py-3"
           >
             {loading ? (
               <span className="inline-flex items-center gap-2">
@@ -292,7 +292,7 @@ export function BrowseClient({ initialType, initialQuery }: BrowseClientProps) {
           </select>
         </div>
 
-        <div className="mt-4 flex flex-wrap gap-2">
+        <div className="mt-4 flex gap-2 overflow-x-auto pb-1 whitespace-nowrap sm:flex-wrap sm:overflow-visible sm:whitespace-normal">
           <button
             onClick={() => {
               setMediaType("all");
@@ -339,22 +339,24 @@ export function BrowseClient({ initialType, initialQuery }: BrowseClientProps) {
         ) : null}
         {error ? <p className="mt-6 text-sm text-red-300">{error}</p> : null}
 
-        <div className={`mt-6 grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 ${loading ? "opacity-70" : "opacity-100"} transition-opacity duration-300`}>
-          {results.map((item) => (
-            <MediaPosterCard
-              key={`${item.id}-${item.media_type ?? mediaType}`}
-              id={item.id}
-              title={titleFor(item)}
-              year={dateFor(item)?.slice(0, 4) || "N/A"}
-              rating={item.vote_average}
-              posterPath={item.poster_path}
-              mediaType={(item.media_type === "movie" || item.media_type === "tv" ? item.media_type : ("title" in item ? "movie" : "tv")) as MediaType}
-              menuKey={`${item.id}-${item.media_type ?? mediaType}`}
-              activeMenuKey={activeMenuKey}
-              onToggleMenu={(menuKey) => setActiveMenuKey(menuKey || null)}
-            />
-          ))}
-        </div>
+        {!loading ? (
+          <div className="mt-6 grid grid-cols-2 gap-3 transition-opacity duration-300 sm:grid-cols-3 sm:gap-4 md:grid-cols-4 lg:grid-cols-6">
+            {results.map((item) => (
+              <MediaPosterCard
+                key={`${item.id}-${item.media_type ?? mediaType}`}
+                id={item.id}
+                title={titleFor(item)}
+                year={dateFor(item)?.slice(0, 4) || "N/A"}
+                rating={item.vote_average}
+                posterPath={item.poster_path}
+                mediaType={(item.media_type === "movie" || item.media_type === "tv" ? item.media_type : ("title" in item ? "movie" : "tv")) as MediaType}
+                menuKey={`${item.id}-${item.media_type ?? mediaType}`}
+                activeMenuKey={activeMenuKey}
+                onToggleMenu={(menuKey) => setActiveMenuKey(menuKey || null)}
+              />
+            ))}
+          </div>
+        ) : null}
       </main>
     </div>
   );

@@ -3,6 +3,14 @@
 Moviepedia is a cross-platform movie discovery app built from a shared monorepo.
 It includes a modern web app, a React Native mobile app, and a shared TMDB core package.
 
+## Preview
+
+![Web Home](portfolio-shots/web-01-home.png)
+![Web Browse Movies](portfolio-shots/web-04-discover-movies.png)
+![Web Title Details](portfolio-shots/web-07-title-details.png)
+![Mobile Home](portfolio-shots/mobile-01-home.png)
+![Mobile Browse Movies](portfolio-shots/mobile-04-discover-movies.png)
+
 ## Workspace Structure
 
 - `apps/web` - Next.js 16 + TypeScript web app

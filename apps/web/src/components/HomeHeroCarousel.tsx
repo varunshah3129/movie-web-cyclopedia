@@ -29,6 +29,7 @@ export function HomeHeroCarousel({ slides }: HomeHeroCarouselProps) {
   const [transitioning, setTransitioning] = useState(false);
 
   const active = slides[activeIndex] ?? null;
+  const canNavigate = slides.length > 1;
 
   const activeGenres = useMemo(() => active?.genres.slice(0, 3) ?? [], [active]);
   const activeCast = useMemo(() => active?.cast.slice(0, 3) ?? [], [active]);
@@ -43,13 +44,11 @@ export function HomeHeroCarousel({ slides }: HomeHeroCarouselProps) {
   }
 
   const goTo = (nextIndex: number) => {
-    if (nextIndex === activeIndex || transitioning) return;
+    if (!canNavigate || nextIndex === activeIndex || transitioning) return;
     setTransitioning(true);
     setHoverPreview(false);
-    window.setTimeout(() => {
-      setActiveIndex((nextIndex + slides.length) % slides.length);
-      window.setTimeout(() => setTransitioning(false), 120);
-    }, 170);
+    setActiveIndex((nextIndex + slides.length) % slides.length);
+    window.setTimeout(() => setTransitioning(false), 120);
   };
 
   const prev = () => goTo(activeIndex - 1);
@@ -58,7 +57,7 @@ export function HomeHeroCarousel({ slides }: HomeHeroCarouselProps) {
   return (
     <>
       <section
-        className={`relative mt-6 overflow-hidden rounded-2xl border border-white/10 transition-all duration-300 ${
+        className={`relative mt-4 overflow-hidden rounded-xl border border-white/10 transition-all duration-300 sm:mt-6 sm:rounded-2xl ${
           transitioning ? "scale-[0.995] opacity-90" : "scale-100 opacity-100"
         }`}
         onMouseEnter={() => setHoverPreview(true)}
@@ -70,11 +69,11 @@ export function HomeHeroCarousel({ slides }: HomeHeroCarouselProps) {
             alt={active.title}
             width={1400}
             height={800}
-            className="h-[50vh] w-full object-cover opacity-90 md:h-[62vh]"
+            className="h-[42vh] min-h-[280px] w-full object-cover opacity-90 sm:h-[48vh] md:h-[62vh]"
             priority
           />
         ) : (
-          <div className="h-[50vh] bg-[radial-gradient(circle_at_top,#1d2d4a_0%,#06080d_65%)] md:h-[62vh]" />
+          <div className="h-[42vh] min-h-[280px] bg-[radial-gradient(circle_at_top,#1d2d4a_0%,#06080d_65%)] sm:h-[48vh] md:h-[62vh]" />
         )}
         {active.trailerKey ? (
           <div
@@ -93,13 +92,13 @@ export function HomeHeroCarousel({ slides }: HomeHeroCarouselProps) {
         <div className="absolute inset-0 bg-gradient-to-r from-black/65 via-black/35 to-black/25" />
         <div className="absolute inset-0 bg-gradient-to-t from-black via-transparent to-transparent" />
 
-        <div className="absolute inset-0 p-5 md:p-8">
+        <div className="absolute inset-0 p-4 sm:p-5 md:p-8">
           <div className="flex h-full items-end">
             <div className="max-w-2xl">
               <p className="text-xs uppercase tracking-[0.2em] text-white/65">Top 10 This Month</p>
-              <h1 className="mt-2 text-2xl font-bold md:text-5xl">{active.title}</h1>
+              <h1 className="mt-2 line-clamp-2 text-xl font-bold sm:text-2xl md:text-5xl">{active.title}</h1>
               <p className="mt-1 text-sm text-white/70">{active.year || "New release"}</p>
-              <p className="mt-3 line-clamp-3 text-sm text-white/85 md:text-base">{active.overview || "Story details are loading."}</p>
+              <p className="mt-2 line-clamp-3 text-xs text-white/85 sm:mt-3 sm:text-sm md:text-base">{active.overview || "Story details are loading."}</p>
 
               <div className="mt-3 flex flex-wrap gap-2">
                 {activeGenres.map((genre) => (
@@ -127,34 +126,40 @@ export function HomeHeroCarousel({ slides }: HomeHeroCarouselProps) {
 
           </div>
 
-          <button
-            type="button"
-            aria-label="Previous movie"
-            onClick={prev}
-            className="absolute left-3 top-1/2 z-10 inline-flex size-9 -translate-y-1/2 items-center justify-center rounded-full border border-white/35 bg-black/45 text-white/90 shadow md:left-4"
-          >
-            <ChevronLeft size={18} aria-hidden />
-          </button>
-          <button
-            type="button"
-            aria-label="Next movie"
-            onClick={next}
-            className="absolute right-3 top-1/2 z-10 inline-flex size-9 -translate-y-1/2 items-center justify-center rounded-full border border-white/35 bg-black/45 text-white/90 shadow md:right-4"
-          >
-            <ChevronRight size={18} aria-hidden />
-          </button>
-
-          <div className="absolute bottom-3 left-1/2 flex -translate-x-1/2 gap-2">
-            {slides.map((slide, idx) => (
+          {canNavigate ? (
+            <>
               <button
-                key={`hero-dot-${slide.id}`}
                 type="button"
-                aria-label={`Go to ${slide.title}`}
-                onClick={() => goTo(idx)}
-                className={`h-1.5 rounded-full transition-all ${idx === activeIndex ? "w-8 bg-white" : "w-3 bg-white/45 hover:bg-white/70"}`}
-              />
-            ))}
-          </div>
+                aria-label="Previous movie"
+                onClick={prev}
+                className="absolute left-2 top-1/2 z-10 inline-flex size-8 -translate-y-1/2 items-center justify-center rounded-full border border-white/35 bg-black/45 text-white/90 shadow sm:left-3 sm:size-9 md:left-4"
+              >
+                <ChevronLeft size={18} aria-hidden />
+              </button>
+              <button
+                type="button"
+                aria-label="Next movie"
+                onClick={next}
+                className="absolute right-2 top-1/2 z-10 inline-flex size-8 -translate-y-1/2 items-center justify-center rounded-full border border-white/35 bg-black/45 text-white/90 shadow sm:right-3 sm:size-9 md:right-4"
+              >
+                <ChevronRight size={18} aria-hidden />
+              </button>
+            </>
+          ) : null}
+
+          {canNavigate ? (
+            <div className="absolute bottom-3 left-1/2 flex -translate-x-1/2 gap-2">
+              {slides.map((slide, idx) => (
+                <button
+                  key={`hero-dot-${slide.id}`}
+                  type="button"
+                  aria-label={`Go to ${slide.title}`}
+                  onClick={() => goTo(idx)}
+                  className={`h-1.5 rounded-full transition-all ${idx === activeIndex ? "w-8 bg-white" : "w-3 bg-white/45 hover:bg-white/70"}`}
+                />
+              ))}
+            </div>
+          ) : null}
         </div>
       </section>
 

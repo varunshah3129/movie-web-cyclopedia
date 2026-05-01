@@ -72,10 +72,18 @@ export interface TmdbVideosResponse {
 
 export type TmdbMediaDetails = TmdbMedia & {
   genres?: TmdbGenre[];
+  belongs_to_collection?: TmdbCollectionRef | null;
   runtime?: number;
   episode_run_time?: number[];
+  number_of_episodes?: number;
+  number_of_seasons?: number;
   status?: string;
   tagline?: string;
+  original_language?: string;
+  production_countries?: Array<{ iso_3166_1: string; name: string }>;
+  origin_country?: string[];
+  budget?: number;
+  revenue?: number;
 };
 
 export interface TmdbDiscoverFilters {
@@ -109,6 +117,44 @@ export interface TmdbStatusResponse {
   success: boolean;
   status_code: number;
   status_message: string;
+}
+
+export interface TmdbCreateListResponse extends TmdbStatusResponse {
+  list_id: number;
+}
+
+export interface TmdbAccountList {
+  id: number;
+  name: string;
+  description: string;
+  item_count: number;
+  iso_639_1: string;
+  poster_path: string | null;
+  favorite_count: number;
+}
+
+export interface TmdbListDetails {
+  id: number;
+  name: string;
+  description: string;
+  item_count: number;
+  items: TmdbMedia[];
+}
+
+export interface TmdbCollectionRef {
+  id: number;
+  name: string;
+  poster_path: string | null;
+  backdrop_path: string | null;
+}
+
+export interface TmdbCollectionDetails {
+  id: number;
+  name: string;
+  overview: string;
+  poster_path: string | null;
+  backdrop_path: string | null;
+  parts: TmdbMovie[];
 }
 
 export interface TmdbRequestTokenResponse {

@@ -33,8 +33,8 @@ export function TitleVideosPanel({ trailerKey = null, videos }: TitleVideosPanel
   return (
     <>
       {activeVideo ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85">
-          <div className="w-full max-w-6xl">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 p-4">
+          <div className="w-full max-w-5xl">
             <div className="mb-2 flex items-start justify-between gap-4 px-3">
               <div>
                 <p className="text-xs uppercase tracking-[0.16em] text-white/55">{activeVideo.type || "Video"}</p>
@@ -56,7 +56,6 @@ export function TitleVideosPanel({ trailerKey = null, videos }: TitleVideosPanel
           </div>
         </div>
       ) : null}
-
       <section className="rounded-xl border border-white/10 bg-[var(--card)] p-4">
         <div className="mb-3 flex items-center justify-between">
           <h2 className="text-sm font-semibold text-white/70">More Videos</h2>

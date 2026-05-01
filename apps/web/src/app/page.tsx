@@ -3,6 +3,7 @@ import { discoverMediaAdvanced, getGenres, getMediaCredits, getMediaVideos, getT
 import { AppHeader } from "@/components/AppHeader";
 import { HomeHeroCarousel } from "@/components/HomeHeroCarousel";
 import { MediaGridSkeleton } from "@/components/MediaGridSkeleton";
+import { HorizontalPosterRail } from "@/components/HorizontalPosterRail";
 import { MediaPosterCard } from "@/components/MediaPosterCard";
 
 type HomeItem = TmdbMedia | TmdbTrendingItem;
@@ -96,19 +97,17 @@ function PosterGrid({ items, keyPrefix }: { items: Array<TmdbMedia | TmdbTrendin
     return <MediaGridSkeleton count={6} />;
   }
   return (
-    <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6">
-      {items.map((item) => (
-        <MediaPosterCard
-          key={`${keyPrefix}-${item.id}`}
-          id={item.id}
-          title={getTitle(item)}
-          year={getDate(item)?.slice(0, 4) || "N/A"}
-          rating={"vote_average" in item ? item.vote_average : undefined}
-          posterPath={"poster_path" in item ? item.poster_path : null}
-          mediaType={getMediaType(item)}
-        />
-      ))}
-    </div>
+    <HorizontalPosterRail
+      keyPrefix={keyPrefix}
+      items={items.map((item) => ({
+        id: item.id,
+        title: getTitle(item),
+        year: getDate(item)?.slice(0, 4) || "N/A",
+        rating: "vote_average" in item ? item.vote_average : undefined,
+        posterPath: "poster_path" in item ? item.poster_path : null,
+        mediaType: getMediaType(item),
+      }))}
+    />
   );
 }
 
@@ -294,6 +293,35 @@ export default async function Home() {
       );
       heroSlides = details;
     }
+
+    if (heroSlides.length < 3) {
+      const fallbackSlides = trending
+        .map((item) => {
+          const backdropPath = "backdrop_path" in item ? item.backdrop_path ?? null : null;
+          const posterPath = "poster_path" in item ? item.poster_path ?? null : null;
+          const overview = "overview" in item ? item.overview || "Trending now on Moviepedia." : "Trending now on Moviepedia.";
+          const genreIds = "genre_ids" in item ? item.genre_ids ?? [] : [];
+          return {
+            id: item.id,
+            mediaType: getMediaType(item),
+            title: getTitle(item),
+            year: getDate(item)?.slice(0, 4) || "N/A",
+            overview,
+            backdropPath: backdropPath ?? posterPath,
+            posterPath,
+            genres: genreIds
+            .map((genreId: number) => movieGenresResponse.genres.find((genre) => genre.id === genreId)?.name)
+            .filter((name): name is string => Boolean(name))
+            .slice(0, 3),
+            cast: [],
+            trailerKey: null,
+          };
+        })
+        .filter((slide) => Boolean(slide.backdropPath || slide.posterPath));
+      const existingIds = new Set(heroSlides.map((slide) => slide.id));
+      const uniqueFallback = fallbackSlides.filter((slide) => !existingIds.has(slide.id));
+      heroSlides = [...heroSlides, ...uniqueFallback].slice(0, 8);
+    }
   } catch {
     trending = [];
     theatricalThisWeek = [];
@@ -320,11 +348,11 @@ export default async function Home() {
     <div className="min-h-screen bg-background text-foreground">
       <AppHeader />
 
-      <main className="mx-auto max-w-7xl px-4 pb-16 md:px-6">
+      <main className="mx-auto max-w-7xl px-3 pb-16 sm:px-4 md:px-6">
         <HomeHeroCarousel slides={heroSlides} />
 
         <section className="mt-10">
-          <div className="mb-4 flex items-center justify-between">
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
             <h2 className="text-xl font-semibold md:text-2xl">Worldwide Top Trending</h2>
             <Link href="/browse" className="text-sm text-white/70">
               View all
@@ -334,7 +362,7 @@ export default async function Home() {
         </section>
 
         <section className="mt-12">
-          <div className="mb-4 flex items-center justify-between">
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
             <h2 className="text-xl font-semibold md:text-2xl">Kids & Family Picks</h2>
             <Link href="/kids" className="text-sm text-white/70">
               View kids
@@ -481,7 +509,7 @@ export default async function Home() {
             <p className="mt-1 text-sm text-white/65">What dropped this week in theaters and what is ready to stream.</p>
           </div>
           <div>
-            <div className="mb-3 flex items-center justify-between">
+            <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
               <h3 className="text-lg font-semibold text-white/90">In Theaters This Week</h3>
               <Link href="/browse?type=movie" className="text-xs text-white/65">
                 Explore theatrical
@@ -490,7 +518,7 @@ export default async function Home() {
             <PosterGrid items={theatricalThisWeek} keyPrefix="theatrical-week" />
           </div>
           <div>
-            <div className="mb-3 flex items-center justify-between">
+            <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
               <h3 className="text-lg font-semibold text-white/90">Streaming This Week</h3>
               <Link href="/browse?type=movie" className="text-xs text-white/65">
                 Explore streaming
@@ -507,7 +535,7 @@ export default async function Home() {
           </div>
           {genreRails.map((rail) => (
             <div key={rail.genre.id}>
-              <div className="mb-3 flex items-center justify-between">
+              <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
                 <h3 className="text-lg font-semibold text-white/90">{rail.genre.name}</h3>
                 <Link href={`/browse?type=movie&genre=${rail.genre.id}`} className="text-xs text-white/65">
                   Explore {rail.genre.name}
@@ -526,7 +554,7 @@ export default async function Home() {
           <div className="space-y-8">
             {worldVoicesRails.map((rail) => (
               <article key={rail.label} className="rounded-xl border border-white/10 bg-[var(--card)] p-4">
-                <div className="mb-3 flex items-center justify-between">
+                <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
                   <h3 className="text-lg font-semibold text-white/90">{rail.label}</h3>
                   <span className="text-xs text-white/60">
                     Avg rating{" "}
