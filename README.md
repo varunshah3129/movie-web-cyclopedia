@@ -102,14 +102,19 @@ Copy them to `.env.local` (web) or `.env` (mobile) and add your own keys. Do not
 
 ## Vercel (Web) Settings
 
-Use these project settings so the monorepo Next.js app builds correctly:
+This app is **Next.js**, not Create React App. Old CRA settings will fail with
+`No Output Directory named "build"`.
 
-- **Root Directory:** `apps/web`
-- **Framework Preset:** Next.js
-- **Node.js Version:** `26.x`
-- **Build Command:** Override OFF (uses `npm run build` / Next.js)
-- **Output Directory:** Override OFF (default `.next`)
-- **Install Command:** Override OFF (uses `apps/web/vercel.json`)
+Required project settings:
+
+1. **Root Directory:** `apps/web`
+2. **Framework Preset:** `Next.js` (not Create React App)
+3. **Node.js Version:** `26.x`
+4. **Build Command:** Override **OFF**
+5. **Output Directory:** Override **OFF** (must NOT be `build`)
+6. **Install Command:** Override **OFF**
+
+If Output Directory is still `build`, the deploy will keep failing.
 
 ## Portfolio Snapshot Automation
 
