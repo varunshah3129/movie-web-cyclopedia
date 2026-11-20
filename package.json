@@ -12,6 +12,7 @@
   "scripts": {
     "dev:web": "npm run dev -w @movie/web",
     "dev:mobile": "npm run start -w @movie/mobile",
+    "build": "npm run build:web",
     "build:web": "npm run build -w @movie/web",
     "capture:portfolio": "node scripts/capture-portfolio-snapshots.mjs",
     "typecheck": "npm run typecheck --workspaces --if-present",
