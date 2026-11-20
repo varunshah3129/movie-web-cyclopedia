@@ -6,6 +6,9 @@ const nextConfig: NextConfig = {
   devIndicators: false,
   allowedDevOrigins: ["127.0.0.1", "localhost", "192.168.1.67"],
   images: {
+    // TMDB already serves sized CDN images; skip Vercel Image Optimization
+    // so free-tier transformation/cache quotas are not burned.
+    unoptimized: true,
     remotePatterns: [
       {
         protocol: "https",
