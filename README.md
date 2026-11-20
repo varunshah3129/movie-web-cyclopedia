@@ -29,7 +29,7 @@ It includes a modern web app, a React Native mobile app, and a shared TMDB core 
 
 ## Prerequisites
 
-- Node.js 20+
+- Node.js 26.x (Vercel production runtime)
 - npm 10+
 - Xcode/Android tooling only if you run native simulators
 
