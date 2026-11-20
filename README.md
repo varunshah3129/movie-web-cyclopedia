@@ -100,6 +100,17 @@ Copy them to `.env.local` (web) or `.env` (mobile) and add your own keys. Do not
 - Set `NEXTAUTH_URL` to your exact production domain used for TMDB connect.
 - Rotate keys immediately if they are ever exposed.
 
+## Vercel (Web) Settings
+
+Use these project settings so the monorepo Next.js app builds correctly:
+
+- **Root Directory:** `apps/web`
+- **Framework Preset:** Next.js
+- **Node.js Version:** `26.x`
+- **Build Command:** Override OFF (uses `npm run build` / Next.js)
+- **Output Directory:** Override OFF (default `.next`)
+- **Install Command:** Override OFF (uses `apps/web/vercel.json`)
+
 ## Portfolio Snapshot Automation
 
 The Playwright workflow script captures a full user journey (home, browse modes, search, detail, auth, library):
